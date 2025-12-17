@@ -42,7 +42,7 @@ const upload = multer({ dest: '/tmp/bazzeye-uploads' });
 
 const PORT = process.env.PORT || 3000;
 
-// ... (existing static/api code)
+app.use(express.static(path.join(__dirname, '../../client/dist')));
 
 io.on('connection', (socket) => {
     console.log('Client connected:', socket.id);
