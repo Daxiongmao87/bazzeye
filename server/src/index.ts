@@ -31,14 +31,16 @@ import { fileService } from './services/FileService';
 import { packageService } from './services/PackageService';
 import { layoutService } from './services/LayoutService'; // [NEW]
 import { cleanerScheduleService } from './services/CleanerScheduleService';
+import { configService } from './services/ConfigService'; // [NEW]
 
 import multer from 'multer';
 import path from 'path';
 
 steamService.setSocket(io);
-systemControlService.setSocket(io); // [NEW] Wire system control
+systemControlService.setSocket(io);
 cleanerScheduleService.setSocket(io);
 cleanerScheduleService.setCleanFunction(() => systemControlService.runCleanSystem());
+configService.setSocket(io); // [NEW]
 
 const upload = multer({ dest: '/tmp/bazzeye-uploads' });
 
@@ -201,6 +203,27 @@ io.on('connection', (socket) => {
         if (!authService.isSudo()) return;
         const schedule = cleanerScheduleService.setSchedule(enabled, intervalHours);
         io.emit('cleaner:schedule-status', schedule);
+    });
+
+    // --- Config Events [NEW] ---
+    socket.on('config:get', () => {
+        socket.emit('config:data', configService.getConfig());
+    });
+
+    socket.on('config:update-alerts', (updates: any) => {
+        if (!authService.isSudo()) return;
+        const newConfig = configService.updateAlerts(updates);
+        // Emitted via service save() -> config:updated or can emit specific here
+        io.emit('config:alerts-updated', newConfig);
+    });
+
+    socket.on('config:update-terminal', (updates: any) => {
+        // user preference? sudo? Let's say sudo for global consistency for now, or open. 
+        // Plan said: Sync transparency with server (if we want global consistency).
+        // Let's allow anyone to change it for now as it's just visual, or arguably sudo.
+        // Given root dashboard, let's treat it as a stored preference.
+        configService.updateTerminal(updates);
+        // Service emits config:updated
     });
 
     socket.on('system:specs', async () => {

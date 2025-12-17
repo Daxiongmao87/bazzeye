@@ -10,7 +10,7 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
 import { CpuWidget, StorageWidget, SystemInfoWidget, SystemDataProvider } from './SystemWidgets';
-import type { AlertSettings } from './SystemWidgets';
+// import type { AlertSettings } from './SystemWidgets'; // Removed
 import SteamWidget from './SteamWidget';
 import TerminalWidget from './TerminalWidget';
 import SystemControlWidget from './SystemControlWidget';
@@ -30,36 +30,6 @@ const Dashboard: React.FC = () => {
     const [showUnlockModal, setShowUnlockModal] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-    // Alert Settings
-    const [alertSettings, setAlertSettings] = useState<AlertSettings>({
-        enabled: true,
-        warningTemp: 80,
-        criticalTemp: 95,
-        sustainedSeconds: 60
-    });
-
-    // Flag to ensure we don't overwrite local storage with defaults on mount
-    const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
-
-    // Load Alert Settings
-    useEffect(() => {
-        const saved = localStorage.getItem('bazzeye_alert_settings');
-        if (saved) {
-            try {
-                setAlertSettings(JSON.parse(saved));
-            } catch (e) {
-                console.error('Failed to parse alert settings', e);
-            }
-        }
-        setIsSettingsLoaded(true);
-    }, []);
-
-    // Save Alert Settings
-    useEffect(() => {
-        if (isSettingsLoaded) {
-            localStorage.setItem('bazzeye_alert_settings', JSON.stringify(alertSettings));
-        }
-    }, [alertSettings, isSettingsLoaded]);
 
     // Auth Input State
     const [passwordInput, setPasswordInput] = useState('');
@@ -338,7 +308,7 @@ const Dashboard: React.FC = () => {
                             </div>
 
                             <div key="cpu" className="bg-gray-800/80 rounded-xl border border-gray-700 overflow-hidden backdrop-blur-sm shadow-xl">
-                                <CpuWidget settings={alertSettings} />
+                                <CpuWidget />
                             </div>
                             <div key="storage" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
                                 <StorageWidget />
@@ -536,60 +506,7 @@ const Dashboard: React.FC = () => {
                             </div> {/* Corrected closing div for space-y-4 */}
 
                             {/* Temperature Alert Settings */}
-                            <div>
-                                <label className="block text-gray-300 text-sm font-bold mb-3 flex justify-between items-center">
-                                    <span>Temperature Alerts</span>
-                                    <input
-                                        type="checkbox"
-                                        checked={alertSettings.enabled}
-                                        onChange={(e) => setAlertSettings({ ...alertSettings, enabled: e.target.checked })}
-                                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
-                                    />
-                                </label>
 
-                                {alertSettings.enabled && (
-                                    <div className="space-y-3 pl-2 border-l-2 border-gray-800">
-                                        <div>
-                                            <div className="flex justify-between text-xs text-gray-400 mb-1">
-                                                <span>Warning Threshold (°C)</span>
-                                                <span className="text-amber-400">{alertSettings.warningTemp}°C</span>
-                                            </div>
-                                            <input
-                                                type="range" min="50" max="100" step="1"
-                                                value={alertSettings.warningTemp}
-                                                onChange={(e) => setAlertSettings({ ...alertSettings, warningTemp: parseInt(e.target.value) })}
-                                                className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <div className="flex justify-between text-xs text-gray-400 mb-1">
-                                                <span>Critical Threshold (°C)</span>
-                                                <span className="text-red-400">{alertSettings.criticalTemp}°C</span>
-                                            </div>
-                                            <input
-                                                type="range" min="60" max="110" step="1"
-                                                value={alertSettings.criticalTemp}
-                                                onChange={(e) => setAlertSettings({ ...alertSettings, criticalTemp: parseInt(e.target.value) })}
-                                                className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <div className="flex justify-between text-xs text-gray-400 mb-1">
-                                                <span>Sustained Duration (seconds)</span>
-                                                <span className="text-blue-400">{alertSettings.sustainedSeconds}s</span>
-                                            </div>
-                                            <input
-                                                type="range" min="5" max="300" step="5"
-                                                value={alertSettings.sustainedSeconds}
-                                                onChange={(e) => setAlertSettings({ ...alertSettings, sustainedSeconds: parseInt(e.target.value) })}
-                                                className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
 
                             <div className="border-t border-gray-800 my-4"></div>
 

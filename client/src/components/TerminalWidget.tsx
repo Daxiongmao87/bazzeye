@@ -23,14 +23,39 @@ const TerminalWidget: React.FC<TerminalWidgetProps> = ({ widgetId = 'terminal', 
     const [terminals, setTerminals] = useState<TerminalInstance[]>([]);
     const [activeTermId, setActiveTermId] = useState<string>('');
     const [showNewTermModal, setShowNewTermModal] = useState(false);
-    const [isTransparent, setIsTransparent] = useState(() => {
-        return localStorage.getItem(`term-transparent-${widgetId}`) === 'true';
-    });
 
-    // Save persist
+    // Server-side transparency config
+    const [isTransparent, setIsTransparent] = useState(false);
+
     useEffect(() => {
-        localStorage.setItem(`term-transparent-${widgetId}`, String(isTransparent));
-    }, [isTransparent, widgetId]);
+        if (!socket) return;
+        socket.emit('config:get');
+        socket.on('config:data', (data: any) => {
+            if (data?.terminal?.transparent !== undefined) setIsTransparent(data.terminal.transparent);
+        });
+        // Listen for specific updates if we implemented granular events
+        // But for now we can likely rely on a full refresh or specific event if we added it?
+        // Server emits 'config:updated' (from service)? No, I implemented 'config:alerts-updated'.
+        // Let's add listener for general config update or add specific one.
+        // Server index.ts: socket.on('config:update-terminal') -> service.updateTerminal.
+        // But the service saves and... wait. Service emits 'config:updated' but index.ts didn't re-broadcast it?
+        // Let's check my ConfigService... save() emits 'config:updated' to `this.io`. 
+        // So yes, we should listen to 'config:updated'.
+        socket.on('config:updated', (newConfig: any) => {
+            if (newConfig?.terminal?.transparent !== undefined) setIsTransparent(newConfig.terminal.transparent);
+        });
+
+        return () => {
+            socket.off('config:data');
+            socket.off('config:updated');
+        };
+    }, [socket]);
+
+    const toggleTransparency = () => {
+        const newVal = !isTransparent;
+        setIsTransparent(newVal); // Optimistic
+        socket?.emit('config:update-terminal', { transparent: newVal });
+    };
 
     const [newCommand, setNewCommand] = useState('');
     const [editingGameId, setEditingGameId] = useState<string | null>(null);
@@ -188,7 +213,7 @@ const TerminalWidget: React.FC<TerminalWidgetProps> = ({ widgetId = 'terminal', 
 
                     {isEditing && (
                         <button
-                            onClick={() => setIsTransparent(!isTransparent)}
+                            onClick={toggleTransparency}
                             className={`p-1.5 rounded transition-colors mr-2 ${isTransparent ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-400'}`}
                             title="Toggle Transparency"
                         >
