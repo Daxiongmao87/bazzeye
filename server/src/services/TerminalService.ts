@@ -1,12 +1,19 @@
 
-import * as pty from 'node-pty';
+let pty: any;
+try {
+    pty = require('node-pty');
+} catch (e) {
+    console.warn('[TerminalService] node-pty failed to load. Terminal features disabled.', e);
+    pty = null;
+}
+
 import { Socket } from 'socket.io';
 import fs from 'fs';
 import path from 'path';
 
 interface TerminalSession {
     id: string;
-    ptyProcess: pty.IPty;
+    ptyProcess: any; // pty.IPty
     command_str?: string;
     widgetId?: string;
     name?: string;
@@ -104,6 +111,11 @@ class TerminalService {
     // ... spawnProcess logic ...
 
     private spawnProcess(socket: Socket, id: string, command: string | null) {
+        if (!pty) {
+            socket.emit('term:output', { id, data: '\r\n\x1b[31mError: Terminal backend not available (node-pty missing).\x1b[0m\r\n' });
+            return;
+        }
+
         const file = command ? '/bin/bash' : (process.env.SHELL || '/bin/bash');
         let args: string[] = [];
 
@@ -112,20 +124,25 @@ class TerminalService {
             args = ['-c', `while true; do echo "Starting: ${command}"; ${command}; echo "Command exited, restarting in 1s..."; sleep 1; done`];
         }
 
-        const ptyProcess = pty.spawn(file, args, {
-            name: 'xterm-color',
-            cols: 80,
-            rows: 30,
-            cwd: process.env.HOME,
-            env: process.env as any
-        });
+        try {
+            const ptyProcess = pty.spawn(file, args, {
+                name: 'xterm-color',
+                cols: 80,
+                rows: 30,
+                cwd: process.env.HOME,
+                env: process.env as any
+            });
 
-        ptyProcess.onData((data) => {
-            socket.emit('term:output', { id, data });
-        });
+            ptyProcess.onData((data: string) => {
+                socket.emit('term:output', { id, data });
+            });
 
-        this.sessions.set(id, { id, ptyProcess, command_str: command || undefined });
-        console.log(`[TerminalService] Created terminal ${id}`);
+            this.sessions.set(id, { id, ptyProcess, command_str: command || undefined });
+            console.log(`[TerminalService] Created terminal ${id}`);
+        } catch (e) {
+            console.error('[TerminalService] Failed to spawn pty:', e);
+            socket.emit('term:output', { id, data: `\r\nError launching terminal: ${e}\r\n` });
+        }
     }
 
     public resize(id: string, cols: number, rows: number) {
