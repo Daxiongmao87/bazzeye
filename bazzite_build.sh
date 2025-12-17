@@ -19,6 +19,10 @@ echo -e "${GREEN}Starting Bazzeye Build for Bazzite...${NC}"
 DBX_FLAGS=""
 if [ "$EUID" -eq 0 ]; then
     echo "Running as root - enabling rootful mode (--root)"
+    echo "Warning: Unsetting SUDO/DOAS variables to bypass distrobox checks."
+    unset SUDO_USER
+    unset SUDO_COMMAND
+    unset DOAS_USER
     DBX_FLAGS="--root"
 fi
 
