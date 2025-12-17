@@ -36,8 +36,7 @@ else
     echo "Service not active or not installed."
 fi
 
-    echo "Service not active or not installed."
-fi
+
 
 # Remove Sudoers Config
 if [ -f "/etc/sudoers.d/bazzeye" ]; then
