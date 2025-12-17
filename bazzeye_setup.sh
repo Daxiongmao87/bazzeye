@@ -111,20 +111,23 @@ if [ ! -d "$RUNTIME_DIR/node/bin" ]; then
         exit 1
     fi
     
-    # Permissions & SELinux (Critical for Systemd on Fedora/Bazzite)
-    echo "Applying permissions..."
-    chmod +x "$RUNTIME_DIR/node/bin/node"
-    
-    # restorecon reverts to default policy (which might be 'user_home_t' -> non-executable by systemd)
-    # We MUST use chcon to force 'bin_t' or 'unconfined_exec_t' so systemd can exec it.
-    if command -v chcon &> /dev/null; then
-        echo "Forcing SELinux executable context (bin_t)..."
-        chcon -R -t bin_t "$RUNTIME_DIR" || echo "Warning: SELinux chcon failed"
-    fi
+
 
     echo "Node.js setup complete."
 else
     echo "Node.js runtime already exists."
+fi
+
+# Permissions & SELinux (Critical for Systemd on Fedora/Bazzite)
+# We apply this every time to ensure updates/copies didn't break it
+echo "Applying permissions..."
+chmod +x "$RUNTIME_DIR/node/bin/node"
+
+# restorecon reverts to default policy (which might be 'user_home_t' -> non-executable by systemd)
+# We MUST use chcon to force 'bin_t' or 'unconfined_exec_t' so systemd can exec it.
+if command -v chcon &> /dev/null; then
+    echo "Forcing SELinux executable context (bin_t)..."
+    chcon -R -t bin_t "$RUNTIME_DIR" || echo "Warning: SELinux chcon failed"
 fi
 
 echo -e "${GREEN}Setup Complete!${NC}"
