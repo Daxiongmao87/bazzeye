@@ -42,7 +42,9 @@ const upload = multer({ dest: '/tmp/bazzeye-uploads' });
 
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static(path.join(__dirname, '../../client/dist')));
+const staticPath = path.join(__dirname, '../../client/dist');
+console.log('Serving static files from:', staticPath);
+app.use(express.static(staticPath));
 
 // SPA Fallback
 app.get('*', (req, res) => {
