@@ -15,79 +15,6 @@ NC='\033[0m'
 
 echo -e "${GREEN}Starting Bazzeye Build for Bazzite...${NC}"
 
-# Configure Distrobox flags
-DBX_FLAGS=""
-if [ "$EUID" -eq 0 ]; then
-    echo "Running as root - enabling rootful mode (--root)"
-    echo "Warning: Unsetting SUDO/DOAS variables to bypass distrobox checks."
-    unset SUDO_USER
-    unset SUDO_COMMAND
-    unset DOAS_USER
-    DBX_FLAGS="--root"
-fi
-
-# Check for Distrobox
-if ! command -v distrobox &> /dev/null; then
-    echo -e "${RED}Error: distrobox is not installed.${NC}"
-    exit 1
-fi
-
-# Check/Create Container
-# Check/Create Container
-echo "Checking build container..."
-# Distrobox might return non-zero if list is empty, handle carefully
-if distrobox list $DBX_FLAGS | grep -q "$CONTAINER"; then
-    echo "Container $CONTAINER found. Skipping creation."
-else
-    echo "Creating build container ($CONTAINER)..."
-    distrobox create $DBX_FLAGS --name "$CONTAINER" --image "$IMAGE" --yes
-fi
-
-# Build Loop
-echo ""
-read -p "Do you want to build/rebuild the project inside the container? (Y/n) " -r
-if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-    # Install Dependencies in Container
-    echo "Ensuring build dependencies (Node.js, npm, build tools)..."
-    # Wrap in bash -c to avoid OCI/ioctl errors
-    if ! distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "sudo dnf install -y nodejs npm git python3 make gcc-c++"; then
-        echo -e "${RED}Error: Failed to install dependencies in container.${NC}"
-        read -p "Continue with setting up Runtime/Service anyway? (y/N) " -r
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
-    else
-        # Build Project
-        echo -e "${GREEN}Running Build inside container...${NC}"
-        echo "Project Path: $CURRENT_DIR"
-
-        # Execute build
-        # usage: npm run install:all && npm run build
-        if distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "cd '$CURRENT_DIR' && npm run install:all && npm run build"; then
-             # Generate Package Cache
-            echo -e "${GREEN}Generating package cache...${NC}"
-            mkdir -p "$CURRENT_DIR/server/storage"
-            # execute this inside container too? or host? Host is fine if rpm-ostree exists.
-            # But the script uses rpm-ostree which is on host.
-            bash "$CURRENT_DIR/scripts/generate-package-cache.sh" "$CURRENT_DIR/server/storage/package-cache.json" 43 || true
-            
-            CACHE_COUNT=$(grep -c '"name"' "$CURRENT_DIR/server/storage/package-cache.json" 2>/dev/null || echo "0")
-            echo -e "${GREEN}Package cache generated with $CACHE_COUNT packages${NC}"
-            echo -e "${GREEN}Build Complete!${NC}"
-            
-            # Cleanup (Optional)
-            echo "Cleaning up build container..."
-            distrobox rm $DBX_FLAGS -f "$CONTAINER" || echo "Warning: Failed to remove container $CONTAINER"
-        else
-            echo -e "${RED}Build failed.${NC}"
-            read -p "Continue with setting up Runtime/Service anyway? (y/N) " -r
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
-        fi
-    fi
-else
-    echo "Skipping build process..."
-fi
-
-
-
 # Runtime Setup
 echo -e "${GREEN}Setting up Runtime Environment...${NC}"
 NODE_VERSION="v22.12.0"
@@ -111,8 +38,6 @@ if [ ! -d "$RUNTIME_DIR/node/bin" ]; then
         exit 1
     fi
     
-
-
     echo "Node.js setup complete."
 else
     echo "Node.js runtime already exists."
@@ -130,7 +55,79 @@ if command -v chcon &> /dev/null; then
     chcon -R -t bin_t "$RUNTIME_DIR" || echo "Warning: SELinux chcon failed"
 fi
 
-echo -e "${GREEN}Setup Complete!${NC}"
+# Configure Distrobox flags
+DBX_FLAGS=""
+if [ "$EUID" -eq 0 ]; then
+    echo "Running as root - enabling rootful mode (--root)"
+    echo "Warning: Unsetting SUDO/DOAS variables to bypass distrobox checks."
+    unset SUDO_USER
+    unset SUDO_COMMAND
+    unset DOAS_USER
+    DBX_FLAGS="--root"
+fi
+
+# Check for Distrobox
+if ! command -v distrobox &> /dev/null; then
+    echo -e "${RED}Error: distrobox is not installed.${NC}"
+    exit 1
+fi
+
+# Check/Create Container
+echo "Checking build container..."
+# Distrobox might return non-zero if list is empty, handle carefully
+if distrobox list $DBX_FLAGS | grep -q "$CONTAINER"; then
+    echo "Container $CONTAINER found. Skipping creation."
+else
+    echo "Creating build container ($CONTAINER)..."
+    distrobox create $DBX_FLAGS --name "$CONTAINER" --image "$IMAGE" --yes
+fi
+
+# Build Loop
+echo ""
+read -p "Do you want to build/rebuild the project inside the container? (Y/n) " -r
+if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    # Install Dependencies in Container
+    echo "Ensuring build dependencies (build tools)..."
+    # Wrap in bash -c to avoid OCI/ioctl errors
+    # Note: We do NOT install nodejs/npm here. We use the bundled one.
+    if ! distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "sudo dnf install -y git python3 make gcc-c++"; then
+        echo -e "${RED}Error: Failed to install dependencies in container.${NC}"
+        read -p "Continue with service setup anyway? (y/N) " -r
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+    else
+        # Build Project
+        echo -e "${GREEN}Running Build inside container...${NC}"
+        echo "Project Path: $CURRENT_DIR"
+        echo "Using Runtime Node: $RUNTIME_DIR/node/bin/node"
+
+        # Execute build
+        # We prepend the bundled node bin to PATH so 'npm' and 'node' resolve to it.
+        if distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "export PATH=\"$CURRENT_DIR/runtime/node/bin:\$PATH\" && echo \"Node version: \$(node -v)\" && cd '$CURRENT_DIR' && npm run install:all && npm run build"; then
+             # Generate Package Cache
+            echo -e "${GREEN}Generating package cache...${NC}"
+            mkdir -p "$CURRENT_DIR/server/storage"
+            # execute this inside container too? or host? Host is fine if rpm-ostree exists.
+            # But the script uses rpm-ostree which is on host.
+            bash "$CURRENT_DIR/scripts/generate-package-cache.sh" "$CURRENT_DIR/server/storage/package-cache.json" 43 || true
+            
+            CACHE_COUNT=$(grep -c '"name"' "$CURRENT_DIR/server/storage/package-cache.json" 2>/dev/null || echo "0")
+            echo -e "${GREEN}Package cache generated with $CACHE_COUNT packages${NC}"
+            echo -e "${GREEN}Build Complete!${NC}"
+            
+            # Cleanup (Optional)
+            echo "Cleaning up build container..."
+            distrobox rm $DBX_FLAGS -f "$CONTAINER" || echo "Warning: Failed to remove container $CONTAINER"
+        else
+            echo -e "${RED}Build failed.${NC}"
+            read -p "Continue with service setup anyway? (y/N) " -r
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+        fi
+    fi
+else
+    echo "Skipping build process..."
+fi
+
+
 echo -e "${GREEN}Setup Complete!${NC}"
 echo -e "You can now run the server manually using: ./start_server.sh"
 
