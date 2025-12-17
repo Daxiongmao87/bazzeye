@@ -64,3 +64,26 @@ echo -e "${GREEN}Package cache generated with $CACHE_COUNT packages${NC}"
 
 echo -e "${GREEN}Build Complete!${NC}"
 
+# Runtime Setup
+echo -e "${GREEN}Setting up Runtime Environment...${NC}"
+NODE_VERSION="v22.12.0"
+NODE_DIST="node-${NODE_VERSION}-linux-x64"
+RUNTIME_DIR="$CURRENT_DIR/runtime"
+
+if [ ! -d "$RUNTIME_DIR/node/bin" ]; then
+    echo "Downloading Node.js ${NODE_VERSION}..."
+    mkdir -p "$RUNTIME_DIR"
+    curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/${NODE_DIST}.tar.xz" -o "$RUNTIME_DIR/node.tar.xz"
+    
+    echo "Extracting Node.js..."
+    mkdir -p "$RUNTIME_DIR/node"
+    tar -xJf "$RUNTIME_DIR/node.tar.xz" -C "$RUNTIME_DIR/node" --strip-components=1
+    rm "$RUNTIME_DIR/node.tar.xz"
+    echo "Node.js setup complete."
+else
+    echo "Node.js runtime already exists."
+fi
+
+echo -e "${GREEN}Setup Complete!${NC}"
+echo -e "You can now run the server using: ./start_server.sh"
+
