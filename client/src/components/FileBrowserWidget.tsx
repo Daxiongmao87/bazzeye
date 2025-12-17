@@ -17,6 +17,9 @@ interface FileEntry {
 const FileBrowserWidget: React.FC = () => {
     const socket = useSocket();
 
+    // Owner info from server
+    const [ownerHome, setOwnerHome] = useState<string | null>(null);
+
     // History Management
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
@@ -41,20 +44,52 @@ const FileBrowserWidget: React.FC = () => {
 
     const getIcon = (iconName?: string) => iconMap[iconName || 'folder'] || <Folder size={16} />;
 
-    const defaultPlaces = [
+    // Default places use ownerHome once available
+    const getDefaultPlaces = (home: string) => [
         { name: 'Root', path: '/', iconName: 'harddrive' },
-        { name: 'Home', path: '/root', iconName: 'home' },
-        { name: 'Downloads', path: '/root/Downloads', iconName: 'download' },
-        { name: 'Documents', path: '/root/Documents', iconName: 'filetext' },
+        { name: 'Home', path: home, iconName: 'home' },
+        { name: 'Downloads', path: `${home}/Downloads`, iconName: 'download' },
+        { name: 'Documents', path: `${home}/Documents`, iconName: 'filetext' },
     ];
 
-    const [places, setPlaces] = useState<{ name: string, path: string, iconName?: string }[]>(() => {
-        const saved = localStorage.getItem('file-browser-places');
-        if (saved) {
-            try { return JSON.parse(saved); } catch (e) { }
-        }
-        return defaultPlaces;
-    });
+    const [places, setPlaces] = useState<{ name: string, path: string, iconName?: string }[]>([]);
+
+    // Fetch owner info on mount
+    useEffect(() => {
+        if (!socket) return;
+
+        socket.emit('system:owner-info');
+
+        socket.on('system:owner-info-data', (data: { home: string, username: string }) => {
+            console.log('[FileBrowser] Owner home:', data.home);
+            setOwnerHome(data.home);
+
+            // Set default places if no saved places or saved places have old /root paths
+            const saved = localStorage.getItem('file-browser-places');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    // Check if saved places still reference /root - if so, reset
+                    const hasOldRootPaths = parsed.some((p: any) => p.path?.includes('/root'));
+                    if (hasOldRootPaths) {
+                        console.log('[FileBrowser] Resetting places due to old /root paths');
+                        setPlaces(getDefaultPlaces(data.home));
+                    } else {
+                        setPlaces(parsed);
+                    }
+                } catch (e) {
+                    setPlaces(getDefaultPlaces(data.home));
+                }
+            } else {
+                setPlaces(getDefaultPlaces(data.home));
+            }
+
+            // Navigate to home
+            navigateTo(data.home);
+        });
+
+        return () => { socket.off('system:owner-info-data'); };
+    }, [socket]);
 
     useEffect(() => {
         localStorage.setItem('file-browser-places', JSON.stringify(places));
@@ -94,10 +129,9 @@ const FileBrowserWidget: React.FC = () => {
     };
 
 
-    // Initial Load
+    // Listen for file list data
     useEffect(() => {
         if (!socket) return;
-        navigateTo('/root'); // Default start
 
         socket.on('files:list-data', (data) => {
             setLoading(false);

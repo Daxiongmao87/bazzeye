@@ -32,6 +32,7 @@ import { packageService } from './services/PackageService';
 import { layoutService } from './services/LayoutService'; // [NEW]
 import { cleanerScheduleService } from './services/CleanerScheduleService';
 import { configService } from './services/ConfigService'; // [NEW]
+import { ownerService } from './services/OwnerService';
 
 import multer from 'multer';
 import path from 'path';
@@ -231,36 +232,44 @@ io.on('connection', (socket) => {
         socket.emit('system:specs-data', specs);
     });
 
+    // Expose owner home path for client (file browser default paths)
+    socket.on('system:owner-info', () => {
+        socket.emit('system:owner-info-data', {
+            home: ownerService.getOwnerHome(),
+            username: ownerService.getOwner()
+        });
+    });
+
     socket.on('files:list', async (path: string) => {
-        const result = await fileService.listFiles(path);
+        const result = await fileService.listFiles(path, authService.isSudo());
         socket.emit('files:list-data', result);
     });
 
     socket.on('files:delete', async ({ path: filePath }) => {
         if (!authService.isSudo()) return;
-        const result = await fileService.deleteFile(filePath);
+        const result = await fileService.deleteFile(filePath, true);
         // Refresh the parent folder
         const parentDir = path.dirname(filePath);
-        const files = await fileService.listFiles(parentDir);
+        const files = await fileService.listFiles(parentDir, true);
         socket.emit('files:list-data', files);
     });
 
     socket.on('files:create-folder', async ({ path: folderPath }) => {
         if (!authService.isSudo()) return; // Optional check
-        await fileService.createFolder(folderPath);
+        await fileService.createFolder(folderPath, true);
         // Refresh parent
         const parentDir = path.dirname(folderPath);
         // actually, if we create a folder inside current view, we might want to refresh current view
         // The passed path is the FULL path to the new folder.
-        const result = await fileService.listFiles(parentDir);
+        const result = await fileService.listFiles(parentDir, true);
         socket.emit('files:list-data', result);
     });
 
     socket.on('files:create-file', async ({ path: filePath }) => {
         if (!authService.isSudo()) return;
-        await fileService.createFile(filePath);
+        await fileService.createFile(filePath, true);
         const parentDir = path.dirname(filePath);
-        const result = await fileService.listFiles(parentDir);
+        const result = await fileService.listFiles(parentDir, true);
         socket.emit('files:list-data', result);
     });
 
