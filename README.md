@@ -41,7 +41,6 @@ cd bazzeye
 We provide a helper script that spins up a Fedora container, installs dependencies, and builds the project for you:
 
 ```bash
-```bash
 ./bazzeye_setup.sh
 ```
 *This will create a temporary distrobox container to build the app, then download a portable Node.js runtime for execution.*
