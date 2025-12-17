@@ -43,33 +43,50 @@ else
     distrobox create $DBX_FLAGS --name "$CONTAINER" --image "$IMAGE" --yes
 fi
 
-# Install Dependencies in Container
-echo "Ensuring build dependencies (Node.js, npm, build tools)..."
-# We ignore errors here in case packages are already installed, or handle gracefully?
-# dnf -y install will exit 0 if nothing to do usually.
-distrobox enter $DBX_FLAGS "$CONTAINER" -- sudo dnf install -y nodejs npm git python3 make gcc-c++
+# Build Loop
+echo ""
+read -p "Do you want to build/rebuild the project inside the container? (Y/n) " -r
+if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+    # Install Dependencies in Container
+    echo "Ensuring build dependencies (Node.js, npm, build tools)..."
+    # Wrap in bash -c to avoid OCI/ioctl errors
+    if ! distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "sudo dnf install -y nodejs npm git python3 make gcc-c++"; then
+        echo -e "${RED}Error: Failed to install dependencies in container.${NC}"
+        read -p "Continue with setting up Runtime/Service anyway? (y/N) " -r
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+    else
+        # Build Project
+        echo -e "${GREEN}Running Build inside container...${NC}"
+        echo "Project Path: $CURRENT_DIR"
 
-# Build Project
-echo -e "${GREEN}Running Build inside container...${NC}"
-echo "Project Path: $CURRENT_DIR"
+        # Execute build
+        # usage: npm run install:all && npm run build
+        if distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "cd '$CURRENT_DIR' && npm run install:all && npm run build"; then
+             # Generate Package Cache
+            echo -e "${GREEN}Generating package cache...${NC}"
+            mkdir -p "$CURRENT_DIR/server/storage"
+            # execute this inside container too? or host? Host is fine if rpm-ostree exists.
+            # But the script uses rpm-ostree which is on host.
+            bash "$CURRENT_DIR/scripts/generate-package-cache.sh" "$CURRENT_DIR/server/storage/package-cache.json" 43 || true
+            
+            CACHE_COUNT=$(grep -c '"name"' "$CURRENT_DIR/server/storage/package-cache.json" 2>/dev/null || echo "0")
+            echo -e "${GREEN}Package cache generated with $CACHE_COUNT packages${NC}"
+            echo -e "${GREEN}Build Complete!${NC}"
+            
+            # Cleanup (Optional)
+            echo "Cleaning up build container..."
+            distrobox rm $DBX_FLAGS -f "$CONTAINER" || echo "Warning: Failed to remove container $CONTAINER"
+        else
+            echo -e "${RED}Build failed.${NC}"
+            read -p "Continue with setting up Runtime/Service anyway? (y/N) " -r
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
+        fi
+    fi
+else
+    echo "Skipping build process..."
+fi
 
-# Execute build
-# usage: npm run install:all && npm run build
-distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "cd '$CURRENT_DIR' && npm run install:all && npm run build"
 
-# Generate Package Cache
-echo -e "${GREEN}Generating package cache...${NC}"
-mkdir -p "$CURRENT_DIR/server/storage"
-bash "$CURRENT_DIR/scripts/generate-package-cache.sh" "$CURRENT_DIR/server/storage/package-cache.json" 43
-
-CACHE_COUNT=$(grep -c '"name"' "$CURRENT_DIR/server/storage/package-cache.json" 2>/dev/null || echo "0")
-echo -e "${GREEN}Package cache generated with $CACHE_COUNT packages${NC}"
-
-echo -e "${GREEN}Build Complete!${NC}"
-
-# Cleanup
-echo "Cleaning up build container..."
-distrobox rm $DBX_FLAGS -f "$CONTAINER" || echo "Warning: Failed to remove container $CONTAINER"
 
 # Runtime Setup
 echo -e "${GREEN}Setting up Runtime Environment...${NC}"
