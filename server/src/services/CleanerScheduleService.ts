@@ -19,7 +19,8 @@ class CleanerScheduleService {
     private cleanFn: (() => Promise<{ success: boolean; output: string }>) | null = null;
 
     constructor() {
-        const dataDir = path.join(process.env.HOME || '.', '.bazzeye-data');
+        // Use app's storage directory instead of $HOME (service user may not have a home dir)
+        const dataDir = path.join(__dirname, '../../storage');
         if (!fs.existsSync(dataDir)) {
             fs.mkdirSync(dataDir, { recursive: true });
         }

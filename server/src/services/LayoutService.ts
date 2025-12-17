@@ -8,10 +8,8 @@ class LayoutService {
     private extras: string[] = [];
 
     constructor() {
-        // Store in local directory or /var/lib/bazzeye? 
-        // For simple deployment, let's use a data dir relative to server or HOME
-        // User asked for "backend", implied persistence across restarts.
-        const dataDir = path.join(process.env.HOME || '.', '.bazzeye-data');
+        // Use app's storage directory instead of $HOME (service user may not have a home dir)
+        const dataDir = path.join(__dirname, '../../storage');
         if (!fs.existsSync(dataDir)) {
             fs.mkdirSync(dataDir, { recursive: true });
         }
