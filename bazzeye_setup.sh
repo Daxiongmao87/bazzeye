@@ -86,6 +86,22 @@ if [ ! -d "$RUNTIME_DIR/node/bin" ]; then
     mkdir -p "$RUNTIME_DIR/node"
     tar -xJf "$RUNTIME_DIR/node.tar.xz" -C "$RUNTIME_DIR/node" --strip-components=1
     rm "$RUNTIME_DIR/node.tar.xz"
+    
+    # Verification
+    if [ ! -f "$RUNTIME_DIR/node/bin/node" ]; then
+        echo -e "${RED}Error: Node.js binary not found at $RUNTIME_DIR/node/bin/node${NC}"
+        echo "Extraction might have failed or folder structure changed."
+        exit 1
+    fi
+    
+    # Permissions & SELinux (Critical for Systemd on Fedora/Bazzite)
+    echo "Applying permissions..."
+    chmod +x "$RUNTIME_DIR/node/bin/node"
+    if command -v restorecon &> /dev/null; then
+        echo "Restoring SELinux context..."
+        restorecon -Rv "$RUNTIME_DIR" || echo "Warning: SELinux restorecon failed (non-fatal if SELinux disabled)"
+    fi
+
     echo "Node.js setup complete."
 else
     echo "Node.js runtime already exists."
