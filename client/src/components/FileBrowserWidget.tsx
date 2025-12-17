@@ -30,15 +30,25 @@ const FileBrowserWidget: React.FC = () => {
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Places Management
+    // Places Management - Store icon NAMES not React elements to avoid serialization issues
+    const iconMap: Record<string, React.ReactNode> = {
+        'harddrive': <HardDrive size={16} />,
+        'home': <Home size={16} />,
+        'download': <Download size={16} />,
+        'filetext': <FileText size={16} />,
+        'folder': <Folder size={16} />,
+    };
+
+    const getIcon = (iconName?: string) => iconMap[iconName || 'folder'] || <Folder size={16} />;
+
     const defaultPlaces = [
-        { name: 'Root', path: '/', icon: <HardDrive size={16} /> },
-        { name: 'Home', path: '/root', icon: <Home size={16} /> },
-        { name: 'Downloads', path: '/root/Downloads', icon: <Download size={16} /> },
-        { name: 'Documents', path: '/root/Documents', icon: <FileText size={16} /> },
+        { name: 'Root', path: '/', iconName: 'harddrive' },
+        { name: 'Home', path: '/root', iconName: 'home' },
+        { name: 'Downloads', path: '/root/Downloads', iconName: 'download' },
+        { name: 'Documents', path: '/root/Documents', iconName: 'filetext' },
     ];
 
-    const [places, setPlaces] = useState<any[]>(() => {
+    const [places, setPlaces] = useState<{ name: string, path: string, iconName?: string }[]>(() => {
         const saved = localStorage.getItem('file-browser-places');
         if (saved) {
             try { return JSON.parse(saved); } catch (e) { }
@@ -57,7 +67,7 @@ const FileBrowserWidget: React.FC = () => {
         // check if exists
         if (places.find(p => p.path === currentPath)) return;
 
-        setPlaces(prev => [...prev, { name, path: currentPath, icon: <Folder size={16} /> }]);
+        setPlaces(prev => [...prev, { name, path: currentPath, iconName: 'folder' }]);
     };
 
     const removePlace = (e: React.MouseEvent, path: string) => {
@@ -269,7 +279,7 @@ const FileBrowserWidget: React.FC = () => {
                                 onClick={() => navigateTo(p.path)}
                                 className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left transition-colors ${currentPath === p.path ? 'bg-blue-600/20 text-blue-300' : 'text-gray-400 hover:bg-gray-700/50 hover:text-white'}`}
                             >
-                                <span className={currentPath === p.path ? 'text-blue-400' : 'text-gray-500'}>{p.icon || <Folder size={16} />}</span>
+                                <span className={currentPath === p.path ? 'text-blue-400' : 'text-gray-500'}>{getIcon(p.iconName)}</span>
                                 <span className="truncate">{p.name}</span>
                             </button>
                             <button
