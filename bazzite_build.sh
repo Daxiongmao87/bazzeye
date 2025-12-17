@@ -15,6 +15,13 @@ NC='\033[0m'
 
 echo -e "${GREEN}Starting Bazzeye Build for Bazzite...${NC}"
 
+# Configure Distrobox flags
+DBX_FLAGS=""
+if [ "$EUID" -eq 0 ]; then
+    echo "Running as root - enabling rootful mode (--root)"
+    DBX_FLAGS="--root"
+fi
+
 # Check for Distrobox
 if ! command -v distrobox &> /dev/null; then
     echo -e "${RED}Error: distrobox is not installed.${NC}"
@@ -22,9 +29,9 @@ if ! command -v distrobox &> /dev/null; then
 fi
 
 # Check/Create Container
-if ! distrobox list | grep -q "$CONTAINER"; then
+if ! distrobox list $DBX_FLAGS | grep -q "$CONTAINER"; then
     echo "Creating build container ($CONTAINER)..."
-    distrobox create --name "$CONTAINER" --image "$IMAGE" --yes
+    distrobox create $DBX_FLAGS --name "$CONTAINER" --image "$IMAGE" --yes
 else
     echo "Container $CONTAINER found."
 fi
@@ -33,7 +40,7 @@ fi
 echo "Ensuring build dependencies (Node.js, npm, build tools)..."
 # We ignore errors here in case packages are already installed, or handle gracefully?
 # dnf -y install will exit 0 if nothing to do usually.
-distrobox enter "$CONTAINER" -- sudo dnf install -y nodejs npm git python3 make gcc-c++
+distrobox enter $DBX_FLAGS "$CONTAINER" -- sudo dnf install -y nodejs npm git python3 make gcc-c++
 
 # Build Project
 echo -e "${GREEN}Running Build inside container...${NC}"
@@ -41,7 +48,7 @@ echo "Project Path: $CURRENT_DIR"
 
 # Execute build
 # usage: npm run install:all && npm run build
-distrobox enter "$CONTAINER" -- bash -c "cd '$CURRENT_DIR' && npm run install:all && npm run build"
+distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "cd '$CURRENT_DIR' && npm run install:all && npm run build"
 
 # Generate Package Cache
 echo -e "${GREEN}Generating package cache...${NC}"
