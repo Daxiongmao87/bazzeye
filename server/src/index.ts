@@ -41,7 +41,13 @@ const upload = multer({ dest: '/tmp/bazzeye-uploads' });
 
 const PORT = process.env.PORT || 3000;
 
-// ... (existing static/api code)
+// Serve static files from the React client
+app.use(express.static(path.join(__dirname, '../../client/dist')));
+
+// Handle client-side routing
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
+});
 
 io.on('connection', (socket) => {
     console.log('Client connected:', socket.id);
