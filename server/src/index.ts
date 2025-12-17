@@ -47,7 +47,7 @@ console.log('Serving static files from:', staticPath);
 app.use(express.static(staticPath));
 
 // SPA Fallback
-app.get('*', (req, res) => {
+app.get(/.*/, (req, res) => {
     res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
 });
 
