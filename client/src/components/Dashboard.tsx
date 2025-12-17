@@ -604,7 +604,7 @@ const Dashboard: React.FC = () => {
     )
 }
             </div >
-        </SystemDataProvider >
+        </div >
     );
 };
 export default Dashboard;
