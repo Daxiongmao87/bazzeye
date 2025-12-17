@@ -33,11 +33,14 @@ if ! command -v distrobox &> /dev/null; then
 fi
 
 # Check/Create Container
-if ! distrobox list $DBX_FLAGS | grep -q "$CONTAINER"; then
+# Check/Create Container
+echo "Checking build container..."
+# Distrobox might return non-zero if list is empty, handle carefully
+if distrobox list $DBX_FLAGS | grep -q "$CONTAINER"; then
+    echo "Container $CONTAINER found. Skipping creation."
+else
     echo "Creating build container ($CONTAINER)..."
     distrobox create $DBX_FLAGS --name "$CONTAINER" --image "$IMAGE" --yes
-else
-    echo "Container $CONTAINER found."
 fi
 
 # Install Dependencies in Container
@@ -140,6 +143,49 @@ EOF
 else
     echo "Skipping service installation."
     echo "A 'bazzeye.service' file has NOT been generated to avoid overwriting existing configs."
+fi
+
+# Sudo Permissions
+echo ""
+echo "----------------------------------------------------------------"
+echo "Bazzeye supports system controls like Reboot, Shutdown, and Update."
+echo "Running as a regular user requires password-less sudo permission for these specific commands."
+read -p "Do you want to configure password-less sudo for Bazzeye controls? (y/N) " -r
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    # Detect paths
+    CMD_REBOOT=$(command -v reboot || echo "/usr/sbin/reboot")
+    CMD_SHUTDOWN=$(command -v shutdown || echo "/usr/sbin/shutdown")
+    CMD_SMARTCTL=$(command -v smartctl || echo "/usr/sbin/smartctl")
+    CMD_UJUST=$(command -v ujust || echo "/usr/bin/ujust")
+    CMD_SYSTEMCTL=$(command -v systemctl || echo "/usr/bin/systemctl") # Optional if you want app to control services
+
+    SUDOERS_FILE="/etc/sudoers.d/bazzeye"
+    USER_NAME="$USER"
+    
+    # Check if we are root
+    if [ "$EUID" -ne 0 ]; then
+        echo "Root privileges required to write to $SUDOERS_FILE"
+        # We construct the file locally then move it? Or justtee. 
+        # Using tee is safer.
+        echo "Creating sudoers rule for user '$USER_NAME'..."
+        
+        # Rule: user ALL=(ALL) NOPASSWD: path1, path2...
+        RULE="$USER_NAME ALL=(ALL) NOPASSWD: $CMD_REBOOT, $CMD_SHUTDOWN, $CMD_SMARTCTL, $CMD_UJUST"
+        
+        # We use a temp file
+        echo "$RULE" | sudo tee "$SUDOERS_FILE" > /dev/null
+        sudo chmod 0440 "$SUDOERS_FILE"
+        echo "Sudoers configuration applied!"
+    else
+        echo "Creating sudoers rule for user '$USER_NAME'..."
+        RULE="$USER_NAME ALL=(ALL) NOPASSWD: $CMD_REBOOT, $CMD_SHUTDOWN, $CMD_SMARTCTL, $CMD_UJUST"
+        echo "$RULE" > "$SUDOERS_FILE"
+        chmod 0440 "$SUDOERS_FILE"
+        echo "Sudoers configuration applied!"
+    fi
+else
+    echo "Skipping sudoers configuration."
+    echo "If you want to use system controls later, you may need to configure sudo yourself."
 fi
 
 

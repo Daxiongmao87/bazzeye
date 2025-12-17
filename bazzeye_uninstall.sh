@@ -36,7 +36,21 @@ else
     echo "Service not active or not installed."
 fi
 
+    echo "Service not active or not installed."
+fi
+
+# Remove Sudoers Config
+if [ -f "/etc/sudoers.d/bazzeye" ]; then
+    echo "Removing sudoers configuration (/etc/sudoers.d/bazzeye)..."
+    if [ "$EUID" -ne 0 ]; then
+        sudo rm -f /etc/sudoers.d/bazzeye
+    else
+        rm -f /etc/sudoers.d/bazzeye
+    fi
+fi
+
 # 2. Remove Artifacts
+
 echo "Cleaning up local files..."
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

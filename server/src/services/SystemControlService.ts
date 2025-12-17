@@ -79,9 +79,11 @@ class SystemControlService {
 
     public async reboot() {
         try {
-            // If running as root, 'reboot' works. If not, 'sudo reboot'
-            // We'll try just 'reboot' first, assuming the app runs as root as per spec.
-            await execAsync('reboot');
+            // Check if we are already root? Assuming not.
+            // Using 'sudo -n' ensures we fail immediately if password is required (non-interactive)
+            // But standard 'sudo' might be better if we expect it to work via NOPASSWD 
+            // 'sudo' is safer, let's assume NOPASSWD is set.
+            await execAsync('sudo reboot');
             return { success: true, message: 'Rebooting system...' };
         } catch (error: any) {
             console.error('Reboot failed:', error);
@@ -91,7 +93,7 @@ class SystemControlService {
 
     public async shutdown() {
         try {
-            await execAsync('shutdown now');
+            await execAsync('sudo shutdown now');
             return { success: true, message: 'Shutting down system...' };
         } catch (error: any) {
             console.error('Shutdown failed:', error);
@@ -108,8 +110,8 @@ class SystemControlService {
 
             for (const dev of devices) {
                 try {
-                    // 2. Run smartctl on each
-                    const { stdout: smartOut } = await execAsync(`smartctl -a /dev/${dev.name} -j`);
+                    // 2. Run smartctl on each - REQUIRES SUDO
+                    const { stdout: smartOut } = await execAsync(`sudo smartctl -a /dev/${dev.name} -j`);
                     const smartData = JSON.parse(smartOut);
 
                     results.push({
@@ -129,7 +131,7 @@ class SystemControlService {
                         passed: false,
                         temp: 0,
                         powerOnHours: 0,
-                        error: "SMART verify failed or not supported"
+                        error: "SMART verify failed or not supported (Check Permissions)"
                     });
                 }
             }
@@ -187,7 +189,7 @@ class SystemControlService {
         }
 
         console.log(`[SystemControl] Executing ujust ${recipe}`);
-        return execAsync(`ujust ${recipe}`);
+        return execAsync(`sudo ujust ${recipe}`);
     }
 
     public async getBiosInfo(): Promise<any> {
@@ -212,7 +214,7 @@ class SystemControlService {
 
     public async runCleanSystem(): Promise<{ success: boolean; output: string }> {
         try {
-            const { stdout } = await execAsync('ujust clean-system');
+            const { stdout } = await execAsync('sudo ujust clean-system');
             return { success: true, output: stdout };
         } catch (error) {
             console.error('Failed to clean system:', error);
