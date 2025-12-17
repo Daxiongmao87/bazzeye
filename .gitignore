@@ -10,3 +10,4 @@ deploy_pkg
 coverage
 node_dist
 node
+.git-backup/
