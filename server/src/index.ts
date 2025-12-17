@@ -160,6 +160,26 @@ io.on('connection', (socket) => {
         socket.emit('system:smart-status-update', data);
     });
 
+    socket.on('system:get-info', async () => {
+        const info = await systemControlService.getSystemInfo();
+        socket.emit('system:info', info);
+    });
+
+    socket.on('system:get-bios', async () => {
+        const bios = await systemControlService.getBiosInfo();
+        socket.emit('system:bios', bios);
+    });
+
+    socket.on('system:clean', async () => {
+        // Notify start
+        socket.emit('system:clean-status', { status: 'running' });
+        const result = await systemControlService.runCleanSystem();
+        socket.emit('system:clean-status', {
+            status: result.success ? 'success' : 'error',
+            output: result.output
+        });
+    });
+
     socket.on('system:specs', async () => {
         const specs = await monitorService.getSysSpecs();
         socket.emit('system:specs-data', specs);

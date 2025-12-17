@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useContext, createContext } from 'react';
 import { useSocket } from '../contexts/SocketContext';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -25,10 +24,11 @@ interface SysSpecs {
 interface SystemData {
     stats: SystemStats | null;
     specs: SysSpecs | null;
+    bios: { vendor: string, version: string, date: string, product: string } | null;
     history: any[];
 }
 
-const SystemDataContext = createContext<SystemData>({ stats: null, specs: null, history: [] });
+const SystemDataContext = createContext<SystemData>({ stats: null, specs: null, bios: null, history: [] });
 
 export const useSystemData = () => useContext(SystemDataContext);
 
@@ -36,12 +36,17 @@ export const SystemDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const socket = useSocket();
     const [stats, setStats] = useState<SystemStats | null>(null);
     const [specs, setSpecs] = useState<SysSpecs | null>(null);
+    const [bios, setBios] = useState<SystemData['bios']>(null);
     const [history, setHistory] = useState<any[]>([]);
 
     useEffect(() => {
         if (!socket) return;
 
-        // Handle immediate history load
+        socket.emit('system:get-bios');
+        socket.on('system:bios', (data: any) => {
+            setBios(data);
+        });
+
         socket.on('system-stats-history', (hist: SystemStats[]) => {
             const formatted = hist.map(data => ({
                 time: new Date(data.timestamp).toLocaleTimeString(),
@@ -77,11 +82,12 @@ export const SystemDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             socket.off('system-stats');
             socket.off('system-stats-history');
             socket.off('system:specs-data');
+            socket.off('system:bios');
         };
     }, [socket]);
 
     return (
-        <SystemDataContext.Provider value={{ stats, specs, history }}>
+        <SystemDataContext.Provider value={{ stats, specs, bios, history }}>
             {children}
         </SystemDataContext.Provider>
     );
@@ -130,6 +136,9 @@ export const SystemInfoWidget: React.FC = () => {
                     </div>
                 </div>
 
+                {/* BIOS / Board Info */}
+                <BiosSection />
+
                 {/* Specs Section - conditional on specs loading */}
                 {specs ? (
                     <>
@@ -170,6 +179,30 @@ export const SystemInfoWidget: React.FC = () => {
                     </div>
                 )}
 
+            </div>
+        </div>
+    );
+};
+
+const BiosSection: React.FC = () => {
+    const { bios } = useSystemData();
+    if (!bios) return null;
+    return (
+        <div className="bg-black/20 p-2 rounded">
+            <div className="text-xs text-gray-400 uppercase font-bold mb-1 flex items-center gap-1">
+                <CircuitBoard size={12} /> Hardware
+            </div>
+            <div className="flex justify-between border-b border-gray-700/50 pb-1 mb-1">
+                <span className="text-gray-400">Product</span>
+                <span className="font-mono text-right text-xs truncate max-w-[150px]" title={bios.product}>{bios.product}</span>
+            </div>
+            <div className="flex justify-between border-b border-gray-700/50 pb-1 mb-1">
+                <span className="text-gray-400">Vendor</span>
+                <span className="font-mono text-right text-xs truncate max-w-[150px]" title={bios.vendor}>{bios.vendor}</span>
+            </div>
+            <div className="flex justify-between">
+                <span className="text-gray-400">BIOS</span>
+                <span className="font-mono text-right text-xs">{bios.version}</span>
             </div>
         </div>
     );

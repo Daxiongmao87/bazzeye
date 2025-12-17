@@ -16,8 +16,9 @@ import TerminalWidget from './TerminalWidget';
 import SystemControlWidget from './SystemControlWidget';
 import FileBrowserWidget from './FileBrowserWidget';
 import SmartWidget from './SmartWidget';
-import { UjustWidget } from './UjustWidget'; // [NEW]
-import { PackageWidget } from './PackageWidget'; // [NEW]
+import { UjustWidget } from './UjustWidget';
+import { PackageWidget } from './PackageWidget';
+import { CleanerWidget } from './CleanerWidget'; // [NEW]
 import { BazzeyeLogo } from './BazzeyeLogo';
 
 const Dashboard: React.FC = () => {
@@ -47,9 +48,10 @@ const Dashboard: React.FC = () => {
         { i: 'controls', x: 9, y: 4, w: 3, h: 6, minW: 2, minH: 6 },
         { i: 'steam', x: 6, y: 8, w: 6, h: 8, minW: 4, minH: 6 },
         { i: 'files', x: 0, y: 10, w: 6, h: 8, minW: 4, minH: 6 },
-        { i: 'ujust', x: 0, y: 18, w: 6, h: 8, minW: 4, minH: 6 }, // [NEW]
-        { i: 'packages', x: 6, y: 18, w: 6, h: 8, minW: 4, minH: 6 }, // [NEW]
-        { i: 'terminal', x: 0, y: 26, w: 12, h: 8, minW: 4, minH: 4 }, // [MOVED DOWN]
+        { i: 'ujust', x: 0, y: 18, w: 4, h: 8, minW: 3, minH: 6 },
+        { i: 'cleaner', x: 4, y: 18, w: 4, h: 8, minW: 3, minH: 6 }, // [NEW]
+        { i: 'packages', x: 8, y: 18, w: 4, h: 8, minW: 3, minH: 6 },
+        { i: 'terminal', x: 0, y: 26, w: 12, h: 8, minW: 4, minH: 4 },
     ];
 
     // Helper for migrating layouts
@@ -299,7 +301,11 @@ const Dashboard: React.FC = () => {
                                 <UjustWidget />
                             </div>
 
-                            {/* [NEW] Package Widget */}
+                            {/* [NEW] Cleaner Widget */}
+                            <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                                <CleanerWidget />
+                            </div>
+
                             <div key="packages" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
                                 <PackageWidget />
                             </div>

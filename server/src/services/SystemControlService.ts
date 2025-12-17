@@ -190,6 +190,35 @@ class SystemControlService {
         return execAsync(`ujust ${recipe}`);
     }
 
+    public async getBiosInfo(): Promise<any> {
+        try {
+            const [vendor, version, date, product] = await Promise.all([
+                execAsync('cat /sys/class/dmi/id/sys_vendor'),
+                execAsync('cat /sys/class/dmi/id/bios_version'),
+                execAsync('cat /sys/class/dmi/id/bios_date'),
+                execAsync('cat /sys/class/dmi/id/product_name')
+            ]);
+            return {
+                vendor: vendor.stdout.trim(),
+                version: version.stdout.trim(),
+                date: date.stdout.trim(),
+                product: product.stdout.trim()
+            };
+        } catch (error) {
+            console.error('Failed to get BIOS info:', error);
+            return { vendor: 'Unknown', version: 'Unknown', date: 'Unknown', product: 'Unknown' };
+        }
+    }
+
+    public async runCleanSystem(): Promise<{ success: boolean; output: string }> {
+        try {
+            const { stdout } = await execAsync('ujust clean-system');
+            return { success: true, output: stdout };
+        } catch (error) {
+            console.error('Failed to clean system:', error);
+            return { success: false, output: error instanceof Error ? error.message : String(error) };
+        }
+    }
 }
 
 export const systemControlService = new SystemControlService();
