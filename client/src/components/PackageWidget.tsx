@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSocket } from '../contexts/SocketContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Package, Search, Trash2, Download, CheckCircle, AlertTriangle } from 'lucide-react';
 
 interface PackageInfo {
@@ -11,6 +12,7 @@ interface PackageInfo {
 
 export const PackageWidget: React.FC = () => {
     const socket = useSocket();
+    const { isSudo } = useAuth();
     const [query, setQuery] = useState('');
     const [searchResults, setSearchResults] = useState<PackageInfo[]>([]);
     const [layeredPkgs, setLayeredPkgs] = useState<string[]>([]);
@@ -111,9 +113,9 @@ export const PackageWidget: React.FC = () => {
                                         <div className="flex justify-between items-start">
                                             <span className="font-mono text-sm text-purple-300 font-bold">{pkg.name}</span>
                                             <button
-                                                disabled={currentAction !== null}
+                                                disabled={currentAction !== null || !isSudo}
                                                 onClick={() => install(pkg.name)}
-                                                className="px-2 py-1 text-xs bg-zinc-700 hover:bg-green-600 text-zinc-200 hover:text-white rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                                                className={`px-2 py-1 text-xs rounded transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed ${isSudo ? 'bg-zinc-700 hover:bg-green-600 text-zinc-200 hover:text-white' : 'bg-zinc-800 text-zinc-600'}`}
                                             >
                                                 <Download size={12} /> Install
                                             </button>
@@ -142,8 +144,9 @@ export const PackageWidget: React.FC = () => {
                                     <span className="font-mono text-sm text-zinc-300">{pkg}</span>
                                     <button
                                         onClick={() => uninstall(pkg)}
-                                        className="h-6 w-6 flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded opacity-0 group-hover:opacity-100 transition-all"
-                                        title="Uninstall"
+                                        disabled={!isSudo}
+                                        className={`h-6 w-6 flex items-center justify-center rounded transition-all ${isSudo ? 'text-zinc-500 hover:text-red-400 hover:bg-zinc-800 opacity-0 group-hover:opacity-100' : 'text-zinc-700 opacity-100 cursor-not-allowed'}`}
+                                        title={isSudo ? "Uninstall" : "Sudo required"}
                                     >
                                         <Trash2 size={14} />
                                     </button>
@@ -159,6 +162,14 @@ export const PackageWidget: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {!isSudo && (
+                <div className="pt-2 text-center">
+                    <p className="text-xs text-yellow-500/80 flex items-center justify-center gap-1">
+                        <AlertTriangle size={12} /> Sudo Mode required for package operations
+                    </p>
+                </div>
+            )}
         </div>
     );
 };
