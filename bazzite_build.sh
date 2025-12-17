@@ -1,0 +1,46 @@
+#!/bin/bash
+# bazzite_build.sh
+# Automated build script for Bazzeye on Bazzite/Atomic-OS using Distrobox
+
+set -e
+
+CONTAINER="bazzeye-builder"
+IMAGE="registry.fedoraproject.org/fedora:latest"
+CURRENT_DIR="$(pwd)"
+
+# Colors
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+echo -e "${GREEN}Starting Bazzeye Build for Bazzite...${NC}"
+
+# Check for Distrobox
+if ! command -v distrobox &> /dev/null; then
+    echo -e "${RED}Error: distrobox is not installed.${NC}"
+    exit 1
+fi
+
+# Check/Create Container
+if ! distrobox list | grep -q "$CONTAINER"; then
+    echo "Creating build container ($CONTAINER)..."
+    distrobox create --name "$CONTAINER" --image "$IMAGE" --yes
+else
+    echo "Container $CONTAINER found."
+fi
+
+# Install Dependencies in Container
+echo "Ensuring build dependencies (Node.js, npm, build tools)..."
+# We ignore errors here in case packages are already installed, or handle gracefully?
+# dnf -y install will exit 0 if nothing to do usually.
+distrobox enter "$CONTAINER" -- sudo dnf install -y nodejs npm git python3 make gcc-c++
+
+# Build Project
+echo -e "${GREEN}Running Build inside container...${NC}"
+echo "Project Path: $CURRENT_DIR"
+
+# Execute build
+# usage: npm run install:all && npm run build
+distrobox enter "$CONTAINER" -- bash -c "cd '$CURRENT_DIR' && npm run install:all && npm run build"
+
+echo -e "${GREEN}Build Complete!${NC}"
