@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
-import { Shield, ShieldAlert, Plus, X, Settings, Lock, Bell } from 'lucide-react';
+import { Shield, ShieldAlert, Plus, X, Settings, Lock, Key } from 'lucide-react';
 
 // Using named exports which are definitely available in index.mjs
 import { Responsive } from 'react-grid-layout';
@@ -36,75 +36,6 @@ const Dashboard: React.FC = () => {
     const [oldPasswordInput, setOldPasswordInput] = useState('');
     const [authError, setAuthError] = useState<string | null>(null);
     const [authSuccess, setAuthSuccess] = useState<string | null>(null);
-
-    // Notifications state
-    const [isSubscribed, setIsSubscribed] = useState(false);
-    const [notificationStatus, setNotificationStatus] = useState<string | null>(null);
-
-    // VAPID Key helper
-    const urlBase64ToUint8Array = (base64String: string) => {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding)
-            .replace(/\-/g, '+')
-            .replace(/_/g, '/');
-
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
-        }
-        return outputArray;
-    };
-
-    const subscribeToPush = async () => {
-        if (!('serviceWorker' in navigator)) {
-            setNotificationStatus('Service Worker not supported');
-            return;
-        }
-        if (!('PushManager' in window)) {
-            setNotificationStatus('Push not supported');
-            return;
-        }
-
-        try {
-            // Check permission
-            const permission = await Notification.requestPermission();
-            if (permission !== 'granted') {
-                setNotificationStatus('Permission denied');
-                return;
-            }
-
-            // Get VAPID key from server
-            socket?.emit('notifications:get-key');
-
-            // We need to wait for the key. 
-            // Instead of complicating with promise/event, let's just listen once.
-            socket?.once('notifications:key', async (publicKey: string) => {
-                if (!publicKey) {
-                    setNotificationStatus('Failed to get server key');
-                    return;
-                }
-
-                const registration = await navigator.serviceWorker.ready;
-                const convertedVapidKey = urlBase64ToUint8Array(publicKey);
-
-                const subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: convertedVapidKey
-                });
-
-                // Send to server
-                socket?.emit('notifications:subscribe', subscription);
-                setIsSubscribed(true);
-                setNotificationStatus('Subscribed!');
-            });
-
-        } catch (e: any) {
-            console.error('Subscription failed', e);
-            setNotificationStatus('Error: ' + e.message);
-        }
-    };
 
     // Layout configuration
     const defaultLayout: RGL_Layout = [
@@ -172,70 +103,50 @@ const Dashboard: React.FC = () => {
     useEffect(() => {
         if (!socket) return;
 
-        // Request initial layout
+        // Request initial data
         socket.emit('layout:get');
 
-        // Listeners
-        socket.on('layout:data', (data: any) => {
+        socket.on('layout:data', (data: { layouts: any, extras: string[] }) => {
             if (data && data.layouts) {
-                // Should we migrate here too? Maybe, to be safe.
-                const migrated = {
+                // Merge/Migrate if needed, but for now trust backend
+                setLayouts({
                     lg: migrateLayout(data.layouts.lg || []),
                     md: migrateLayout(data.layouts.md || []),
                     sm: migrateLayout(data.layouts.sm || [])
-                };
-                setLayouts(migrated);
-                setExtraTerminals(data.extras || []);
+                });
+            }
+            if (data && data.extras) {
+                setExtraTerminals(data.extras);
             }
         });
 
-        socket.on('layout:updated', (data: any) => {
+        socket.on('layout:updated', (data: { layouts: any, extras: string[] }) => {
             // Received update from another client
-            if (data && data.layouts) {
-                const migrated = {
-                    lg: migrateLayout(data.layouts.lg || []),
-                    md: migrateLayout(data.layouts.md || []),
-                    sm: migrateLayout(data.layouts.sm || [])
-                };
-                setLayouts(migrated);
-                setExtraTerminals(data.extras || []);
-            }
+            if (data && data.layouts) setLayouts(data.layouts);
+            if (data && data.extras) setExtraTerminals(data.extras);
         });
 
-        // Auth Listeners
-        socket.on('auth:needs-setup', () => {
-            setShowSetupModal(true);
-        });
-
-        socket.on('auth:require-password', () => {
-            setShowUnlockModal(true);
-            setAuthError(null);
-            setPasswordInput('');
-        });
+        // Auth Events
+        socket.on('auth:needs-setup', () => setShowSetupModal(true));
+        socket.on('auth:require-password', () => setShowUnlockModal(true)); // Challenge
 
         socket.on('auth:verify-success', () => {
             setShowUnlockModal(false);
             setAuthError(null);
         });
-
         socket.on('auth:verify-fail', () => {
-            setAuthError("Incorrect password");
+            setAuthError('Incorrect password');
         });
 
         socket.on('auth:set-password-success', () => {
-            setAuthSuccess("Password updated successfully");
-            setAuthError(null);
+            setShowSetupModal(false);
+            setShowSettingsModal(false);
+            setAuthSuccess('Password updated successfully');
+            setTimeout(() => setAuthSuccess(null), 3000);
             setPasswordInput('');
             setConfirmPasswordInput('');
             setOldPasswordInput('');
-
-            // Close after delay?
-            setTimeout(() => {
-                setShowSetupModal(false);
-                setAuthSuccess(null);
-            }, 1000);
         });
-
         socket.on('auth:set-password-error', (msg: string) => {
             setAuthError(msg);
         });
@@ -252,29 +163,9 @@ const Dashboard: React.FC = () => {
         };
     }, [socket]);
 
-    // Helpers for Auth
-    const handleAuthUnlock = () => {
-        socket?.emit('auth:verify-password', passwordInput);
-    };
-
-    const handleSetPassword = () => {
-        if (passwordInput !== confirmPasswordInput) {
-            setAuthError("Passwords do not match");
-            return;
-        }
-        socket?.emit('auth:set-password', { password: passwordInput, oldPassword: oldPasswordInput });
-    };
-
-    const handleSkipSetup = () => {
-        // Set empty password
-        socket?.emit('auth:set-password', { password: '' });
-    };
-
     const onLayoutChange = (_currentLayout: RGL_Layout, allLayouts: any) => {
         setLayouts(allLayouts);
-        // Debounce save? Or save immediately.
-        // For drag/drop, immediate save is okay but might be spammy.
-        // But react-grid-layout calls this only on drag end mostly?
+        // Save to backend
         socket?.emit('layout:save', { layouts: allLayouts, extras: extraTerminals });
     };
 
@@ -283,28 +174,22 @@ const Dashboard: React.FC = () => {
     };
 
     const removeTerminalWidget = (id: string) => {
-        setExtraTerminals(prev => {
-            const next = prev.filter(t => t !== id);
-            // We need to update layout too before saving?
-            // Actually, setExtraTerminals update is async, so we should calc everything and emit.
-            // But we can't emit inside setState updater easily with current values.
-            // Let's rely on the useEffect dependency or do it carefully.
-            return next;
-        });
-
-        // We need the NEW terminals list to save.
-        // Let's do functional updates properly or just recalc locally.
         const nextExtras = extraTerminals.filter(t => t !== id);
+        setExtraTerminals(nextExtras);
 
-        setLayouts(prev => {
-            const nextLayouts = {
-                lg: prev.lg.filter(i => i.i !== id),
-                md: prev.md.filter(i => i.i !== id),
-                sm: prev.sm.filter(i => i.i !== id)
-            };
-            socket?.emit('layout:save', { layouts: nextLayouts, extras: nextExtras });
-            return nextLayouts;
-        });
+        const nextLayouts = {
+            lg: layouts.lg.filter(i => i.i !== id),
+            md: layouts.md.filter(i => i.i !== id),
+            sm: layouts.sm.filter(i => i.i !== id)
+        };
+        setLayouts(nextLayouts);
+
+        socket?.emit('layout:save', { layouts: nextLayouts, extras: nextExtras });
+
+        // Also tell server to stop that terminal process if we tracked it?
+        // Actually terminal service persists configs, we should remove them there too?
+        // Yes, let's remove the widget config
+        socket?.emit('term:remove', { id });
     };
 
     const addTerminalWidget = () => {
@@ -312,17 +197,16 @@ const Dashboard: React.FC = () => {
         const nextExtras = [...extraTerminals, newId];
         setExtraTerminals(nextExtras);
 
-        // We need to calculate the new layout immediately to save it
-        setLayouts(prev => {
-            const newItem = { i: newId, x: 0, y: Infinity, w: 6, h: 8, minW: 4, minH: 4 };
-            const nextLayouts = {
-                lg: [...prev.lg, newItem],
-                md: [...prev.md, { ...newItem, w: 5 }],
-                sm: [...prev.sm, newItem]
-            };
-            socket?.emit('layout:save', { layouts: nextLayouts, extras: nextExtras });
-            return nextLayouts;
-        });
+        // Calculate new layout
+        const newItem = { i: newId, x: 0, y: Infinity, w: 6, h: 8, minW: 4, minH: 4 };
+        const nextLayouts = {
+            lg: [...layouts.lg, newItem],
+            md: [...layouts.md, { ...newItem, w: 5 }],
+            sm: [...layouts.sm, newItem]
+        };
+        setLayouts(nextLayouts);
+
+        socket?.emit('layout:save', { layouts: nextLayouts, extras: nextExtras });
     };
 
     // Cast Responsive to any to avoid strict prop typing issues with isDraggable in some versions
@@ -345,16 +229,21 @@ const Dashboard: React.FC = () => {
                 </h1>
                 <div className="flex gap-4">
                     {isDraggable && (
-                        <button onClick={addTerminalWidget} className="bg-green-700 hover:bg-green-600 px-3 py-1 rounded border border-green-500 text-sm flex items-center gap-1">
-                            <Plus size={16} /> Add Terminal Card
-                        </button>
+                        <>
+                            <button onClick={() => setShowSettingsModal(true)} className="bg-gray-800 hover:bg-gray-700 p-2 rounded border border-gray-700 text-gray-300" title="Security Settings">
+                                <Key size={16} />
+                            </button>
+                            <button onClick={addTerminalWidget} className="bg-green-700 hover:bg-green-600 px-3 py-1 rounded border border-green-500 text-sm flex items-center gap-1">
+                                <Plus size={16} /> Add Terminal Card
+                            </button>
+                        </>
                     )}
                     <button
-                        onClick={isDraggable ? toggleLayoutLock : () => setShowSettingsModal(true)}
+                        onClick={toggleLayoutLock}
                         className={`p-2 rounded-full border transition-all ${isDraggable ? 'bg-blue-600 border-blue-400 text-white rotate-180' : 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-400'}`}
-                        title={isDraggable ? "Lock Layout" : "Edit Layout / Settings"}
+                        title={isDraggable ? "Lock Layout" : "Edit Layout"}
                     >
-                        {isDraggable ? <X size={20} /> : <Settings size={20} />}
+                        <Settings size={20} />
                     </button>
                     <button onClick={toggleSudo} className={`px-3 py-1 rounded border flex items-center gap-2 text-sm font-semibold transition-colors ${isSudo ? 'bg-red-900/50 border-red-500 text-red-200' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>
                         {isSudo ? <ShieldAlert size={16} /> : <Shield size={16} />}
@@ -442,148 +331,153 @@ const Dashboard: React.FC = () => {
                 </div>
             </SystemDataProvider>
 
-            {/* Password Setup Modal */}
+            {/* Auth Modals */}
+
+            {/* 1. Setup Modal (First Run or Reset) */}
             {showSetupModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full shadow-2xl">
-                        <div className="flex items-center gap-3 mb-4 text-blue-400">
-                            <Shield size={32} />
-                            <h2 className="text-xl font-bold text-white">Setup Security</h2>
-                        </div>
-                        <p className="text-gray-400 mb-6 text-sm">
-                            Protect your dashboard's administrative functions (Reboot, Terminal, etc.) with a password.
-                        </p>
+                <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center backdrop-blur-md">
+                    <div className="bg-gray-900 border border-gray-700 p-8 rounded-2xl shadow-2xl max-w-md w-full">
+                        <div className="flex justify-center mb-6 text-blue-500"><Shield size={64} /></div>
+                        <h2 className="text-2xl font-bold text-center mb-2 text-white">Secure Your Dashboard</h2>
+                        <p className="text-gray-400 text-center mb-6">Set a password to protect Sudo actions (Reboot, Terminal, etc.).</p>
 
-                        {authError && <div className="bg-red-900/30 border border-red-800 text-red-200 px-3 py-2 rounded mb-4 text-sm">{authError}</div>}
-                        {authSuccess && <div className="bg-green-900/30 border border-green-800 text-green-200 px-3 py-2 rounded mb-4 text-sm">{authSuccess}</div>}
-
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs uppercase text-gray-500 font-bold mb-1">New Password</label>
-                                <input
-                                    type="password"
-                                    className="w-full bg-black/50 border border-gray-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none"
-                                    value={passwordInput}
-                                    onChange={e => setPasswordInput(e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs uppercase text-gray-500 font-bold mb-1">Confirm Password</label>
-                                <input
-                                    type="password"
-                                    className="w-full bg-black/50 border border-gray-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none"
-                                    value={confirmPasswordInput}
-                                    onChange={e => setConfirmPasswordInput(e.target.value)}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="mt-6 flex gap-3 justify-end">
-                            <button onClick={handleSkipSetup} className="px-4 py-2 rounded text-gray-500 hover:text-white text-sm">Skip (Not Recommended)</button>
-                            <button onClick={handleSetPassword} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold shadow-lg shadow-blue-900/20">Set Password</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Unlock Modal */}
-            {showUnlockModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-sm w-full shadow-2xl">
-                        <div className="flex flex-col items-center gap-4 mb-4">
-                            <div className="p-4 bg-red-900/20 rounded-full text-red-500">
-                                <Lock size={32} />
-                            </div>
-                            <h2 className="text-xl font-bold text-white">Sudo Access Required</h2>
-                        </div>
-                        <p className="text-gray-400 mb-6 text-sm text-center">
-                            Please enter your dashboard password to continue.
-                        </p>
-                        {authError && <div className="bg-red-900/30 border border-red-800 text-red-200 px-3 py-2 rounded mb-4 text-sm text-center">{authError}</div>}
+                        {authError && <div className="bg-red-900/50 text-red-200 p-3 rounded mb-4 text-center text-sm">{authError}</div>}
 
                         <input
                             type="password"
-                            placeholder="Password"
-                            autoFocus
-                            className="w-full bg-black/50 border border-gray-700 rounded p-2 text-white focus:border-red-500 focus:outline-none mb-4 text-center"
+                            className="w-full bg-gray-800 border border-gray-700 rounded px-4 py-3 mb-3 text-white focus:border-blue-500 outline-none"
+                            placeholder="Data Password"
                             value={passwordInput}
-                            onChange={e => setPasswordInput(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleAuthUnlock()}
+                            onChange={(e) => setPasswordInput(e.target.value)}
+                        />
+                        <input
+                            type="password"
+                            className="w-full bg-gray-800 border border-gray-700 rounded px-4 py-3 mb-6 text-white focus:border-blue-500 outline-none"
+                            placeholder="Confirm Password"
+                            value={confirmPasswordInput}
+                            onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                        />
+
+                        <button
+                            onClick={() => {
+                                if (passwordInput !== confirmPasswordInput) {
+                                    setAuthError("Passwords do not match");
+                                    return;
+                                }
+                                if (!passwordInput) {
+                                    setAuthError("Password cannot be empty");
+                                    return;
+                                }
+                                socket?.emit('auth:set-password', { password: passwordInput });
+                            }}
+                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors mb-3"
+                        >
+                            <span className="flex items-center justify-center gap-2"><Lock size={18} /> Set Password</span>
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                if (confirm("Running without a password is NOT recommended. Anyone on the network can control this server. Are you sure?")) {
+                                    socket?.emit('auth:set-password', { password: '' });
+                                }
+                            }}
+                            className="w-full text-gray-500 hover:text-gray-300 text-sm py-2"
+                        >
+                            Skip (Not Recommended)
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* 2. Unlock Modal (Challenge) */}
+            {showUnlockModal && (
+                <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm">
+                    <div className="bg-gray-900 border border-gray-700 p-6 rounded-xl shadow-2xl max-w-sm w-full">
+                        <div className="flex justify-center mb-4 text-yellow-500"><Lock size={48} /></div>
+                        <h2 className="text-xl font-bold text-center mb-4 text-white">Password Required</h2>
+
+                        {authError && <div className="bg-red-900/50 text-red-200 p-2 rounded mb-4 text-center text-sm">{authError}</div>}
+
+                        <input
+                            type="password"
+                            autoFocus
+                            className="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 mb-4 text-white focus:border-yellow-500 outline-none"
+                            placeholder="Password..."
+                            value={passwordInput}
+                            onChange={(e) => { setPasswordInput(e.target.value); setAuthError(null); }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    socket?.emit('auth:verify-password', passwordInput);
+                                    setPasswordInput('');
+                                }
+                            }}
                         />
                         <div className="flex gap-2">
-                            <button onClick={() => setShowUnlockModal(false)} className="flex-1 py-2 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">Cancel</button>
-                            <button onClick={handleAuthUnlock} className="flex-1 py-2 rounded bg-red-600 hover:bg-red-500 text-white font-bold">Unlock</button>
+                            <button onClick={() => { setShowUnlockModal(false); setPasswordInput(''); setAuthError(null); }} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded">Cancel</button>
+                            <button onClick={() => { socket?.emit('auth:verify-password', passwordInput); setPasswordInput(''); }} className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white py-2 rounded">Unlock</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Settings Modal (Change Password) */}
+            {/* 3. Settings Modal (Password Mgmt) */}
             {showSettingsModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-md w-full shadow-2xl relative">
+                <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm">
+                    <div className="bg-gray-900 border border-gray-700 p-6 rounded-xl shadow-2xl max-w-md w-full relative">
                         <button onClick={() => setShowSettingsModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20} /></button>
+                        <h2 className="text-xl font-bold mb-6 text-white flex items-center gap-2"><Settings size={24} /> Security Settings</h2>
 
-                        <div className="flex items-center gap-3 mb-6 text-gray-200">
-                            <Settings size={24} />
-                            <h2 className="text-xl font-bold">Dashboard Settings</h2>
-                        </div>
+                        {authSuccess && <div className="bg-green-900/50 text-green-200 p-3 rounded mb-4 text-center text-sm">{authSuccess}</div>}
+                        {authError && <div className="bg-red-900/50 text-red-200 p-3 rounded mb-4 text-center text-sm">{authError}</div>}
 
-                        <div className="mb-6">
-                            <h3 className="text-sm uppercase text-gray-500 font-bold mb-3 border-b border-gray-800 pb-1">Change Password</h3>
-                            {authError && <div className="bg-red-900/30 border border-red-800 text-red-200 px-3 py-2 rounded mb-4 text-sm">{authError}</div>}
-                            {authSuccess && <div className="bg-green-900/30 border border-green-800 text-green-200 px-3 py-2 rounded mb-4 text-sm">{authSuccess}</div>}
-
-                            <div className="space-y-3">
-                                <div>
-                                    <label className="block text-xs uppercase text-gray-500 font-bold mb-1">Current Password (if any)</label>
-                                    <input
-                                        type="password"
-                                        className="w-full bg-black/50 border border-gray-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none"
-                                        value={oldPasswordInput}
-                                        onChange={e => setOldPasswordInput(e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs uppercase text-gray-500 font-bold mb-1">New Password (leave empty to remove)</label>
-                                    <input
-                                        type="password"
-                                        className="w-full bg-black/50 border border-gray-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none"
-                                        value={passwordInput}
-                                        onChange={e => setPasswordInput(e.target.value)}
-                                    />
-                                </div>
-                                <div>
-                                    <input
-                                        type="password"
-                                        placeholder="Confirm New Password"
-                                        className="w-full bg-black/50 border border-gray-700 rounded p-2 text-white focus:border-blue-500 focus:outline-none"
-                                        value={confirmPasswordInput}
-                                        onChange={e => setConfirmPasswordInput(e.target.value)}
-                                    />
-                                </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-gray-400 text-xs uppercase font-bold mb-2">Change Password</label>
+                                <input
+                                    type="password"
+                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:border-blue-500 outline-none mb-2"
+                                    placeholder="Old Password (if set)"
+                                    value={oldPasswordInput}
+                                    onChange={(e) => setOldPasswordInput(e.target.value)}
+                                />
+                                <input
+                                    type="password"
+                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:border-blue-500 outline-none mb-2"
+                                    placeholder="New Password"
+                                    value={passwordInput}
+                                    onChange={(e) => setPasswordInput(e.target.value)}
+                                />
+                                <input
+                                    type="password"
+                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:border-blue-500 outline-none"
+                                    placeholder="Confirm New Password"
+                                    value={confirmPasswordInput}
+                                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                                />
                             </div>
-                            <div className="mt-4 flex justify-end">
-                                <button onClick={handleSetPassword} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold">Update Password</button>
-                            </div>
-                        </div>
 
-                        <div className="mb-6">
-                            <h3 className="text-sm uppercase text-gray-500 font-bold mb-3 border-b border-gray-800 pb-1">Notifications</h3>
-                            <div className="flex items-center justify-between">
-                                <div className="text-sm text-gray-400">
-                                    Receive push notifications for system updates and alerts.
-                                </div>
-                                <button
-                                    onClick={subscribeToPush}
-                                    disabled={isSubscribed || notificationStatus === 'Permission denied'}
-                                    className={`px-3 py-1 rounded text-sm font-bold flex items-center gap-2 ${isSubscribed ? 'bg-green-900/20 text-green-500 cursor-default' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
-                                >
-                                    <Bell size={16} />
-                                    {isSubscribed ? 'Enabled' : 'Enable'}
-                                </button>
-                            </div>
-                            {notificationStatus && <p className="text-xs text-gray-500 mt-2">{notificationStatus}</p>}
+                            <button
+                                onClick={() => {
+                                    if (passwordInput !== confirmPasswordInput) { setAuthError('Passwords do not match'); return; }
+                                    socket?.emit('auth:set-password', { password: passwordInput, oldPassword: oldPasswordInput });
+                                }}
+                                className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 rounded"
+                            >
+                                Update Password
+                            </button>
+
+                            <div className="border-t border-gray-800 my-4"></div>
+
+                            <button
+                                onClick={() => {
+                                    if (confirm("Remove password protection? This is not safe.")) {
+                                        socket?.emit('auth:set-password', { password: '', oldPassword: oldPasswordInput });
+                                    }
+                                }}
+                                className="w-full bg-red-900/30 hover:bg-red-900/50 text-red-300 font-semibold py-2 rounded border border-red-900/50"
+                            >
+                                Remove Password Protection
+                            </button>
                         </div>
                     </div>
                 </div>

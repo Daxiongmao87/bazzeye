@@ -29,8 +29,7 @@ import { terminalService } from './services/TerminalService';
 import { systemControlService } from './services/SystemControlService';
 import { fileService } from './services/FileService';
 import { packageService } from './services/PackageService';
-import { layoutService } from './services/LayoutService';
-import { notificationService } from './services/NotificationService'; // [NEW]
+import { layoutService } from './services/LayoutService'; // [NEW]
 
 import multer from 'multer';
 import path from 'path';
@@ -42,20 +41,7 @@ const upload = multer({ dest: '/tmp/bazzeye-uploads' });
 
 const PORT = process.env.PORT || 3000;
 
-const staticPath = path.join(__dirname, '../../client/dist');
-console.log('Serving static files from:', staticPath);
-app.use(express.static(staticPath));
-
-// SPA Fallback
-app.use((req, res) => {
-    console.log('SPA Fallback hit for:', req.url);
-    res.sendFile(path.join(__dirname, '../../client/dist/index.html'), (err) => {
-        if (err) {
-            console.error('SendFile error:', err);
-            res.status(500).send('Error loading frontend');
-        }
-    });
-});
+// ... (existing static/api code)
 
 io.on('connection', (socket) => {
     console.log('Client connected:', socket.id);
@@ -158,13 +144,7 @@ io.on('connection', (socket) => {
         if (action === 'update') {
             // Trigger update
             systemControlService.updateSystem()
-                .then(() => {
-                    socket.emit('system:update-status', { status: 'complete' });
-                    notificationService.sendNotification({
-                        title: 'System Update Complete',
-                        body: 'The system update has finished successfully. Please reboot.'
-                    });
-                })
+                .then(() => socket.emit('system:update-status', { status: 'complete' }))
                 .catch(err => socket.emit('system:update-status', { status: 'error', error: err.message }));
             socket.emit('system:update-status', { status: 'started' });
         }
@@ -235,7 +215,6 @@ io.on('connection', (socket) => {
     });
 
     // --- Package Manager Events ---
-    // --- Package Manager Events ---
     socket.on('package:search', async (query: string) => {
         const results = await packageService.search(query);
         socket.emit('package:search-results', results);
@@ -272,16 +251,6 @@ io.on('connection', (socket) => {
         } catch (e: any) {
             socket.emit('package:status', { pkg, status: 'error', error: e.message });
         }
-    });
-
-    // --- Notification Events ---
-    socket.on('notifications:get-key', () => {
-        socket.emit('notifications:key', notificationService.getPublicKey());
-    });
-
-    socket.on('notifications:subscribe', (subscription: any) => {
-        notificationService.subscribe(subscription);
-        console.log('New Push Subscription registered');
     });
 
     socket.on('disconnect', () => {

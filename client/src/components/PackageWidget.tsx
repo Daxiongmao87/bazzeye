@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState } from 'react';
-import { useSocket } from '../contexts/SocketContext';
+import { socket } from '../socket';
 import { Package, Search, Trash2, Download, CheckCircle, AlertTriangle } from 'lucide-react';
 
 interface PackageInfo {
@@ -9,7 +10,6 @@ interface PackageInfo {
 }
 
 export const PackageWidget: React.FC = () => {
-    const socket = useSocket();
     const [query, setQuery] = useState('');
     const [searchResults, setSearchResults] = useState<PackageInfo[]>([]);
     const [layeredPkgs, setLayeredPkgs] = useState<string[]>([]);
@@ -17,7 +17,6 @@ export const PackageWidget: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'search' | 'installed'>('search');
 
     useEffect(() => {
-        if (!socket) return;
         socket.emit('package:list-layered');
 
         const handleResults = (data: PackageInfo[]) => setSearchResults(data);
@@ -38,23 +37,23 @@ export const PackageWidget: React.FC = () => {
             socket.off('package:layered-list', handleLayered);
             socket.off('package:status', handleStatus);
         };
-    }, [socket]);
+    }, []);
 
     const search = () => {
         if (!query) return;
         setSearchResults([]); // clear prev
-        socket?.emit('package:search', query);
+        socket.emit('package:search', query);
     };
 
     const install = (pkg: string) => {
         if (confirm(`Install ${pkg}? This may take a while.`)) {
-            socket?.emit('package:install', pkg);
+            socket.emit('package:install', pkg);
         }
     };
 
     const uninstall = (pkg: string) => {
         if (confirm(`Uninstall ${pkg}? This requires reboot to finish.`)) {
-            socket?.emit('package:uninstall', pkg);
+            socket.emit('package:uninstall', pkg);
         }
     };
 
