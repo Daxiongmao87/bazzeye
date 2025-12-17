@@ -215,8 +215,9 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     
     sudo chown -R "$ORIGINAL_USER:bazzeye" "$WORKING_DIR"
     sudo chmod -R g+rX "$WORKING_DIR"
-    # Storage directory needs write access
+    # Storage and logs directories need write access
     sudo chmod -R g+rwX "$WORKING_DIR/server/storage" 2>/dev/null || true
+    sudo chmod -R g+rwX "$WORKING_DIR/server/logs" 2>/dev/null || true
     
     # Generate Service File
     SERVICE_FILE="bazzeye.service"
