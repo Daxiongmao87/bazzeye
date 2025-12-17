@@ -1,7 +1,7 @@
-
-import { exec, spawn } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
-import { systemControlService } from './SystemControlService'; // Reuse checking logic if needed? Nah.
+import * as fs from 'fs';
+import * as path from 'path';
 
 const execAsync = promisify(exec);
 
@@ -10,30 +10,66 @@ export interface PackageInfo {
     summary: string;
     version?: string;
     arch?: string;
-    isInstalled?: boolean; // If we can determine it easily
 }
 
-class PackageService {
+// Cache file is generated during build phase by bazzite_build.sh
+const CACHE_FILE = path.join(__dirname, '../../storage/package-cache.json');
 
-    // Cache for layered packages
+class PackageService {
+    // Cache for available packages - single array, replaced on load (no memory leak)
+    private packageCache: PackageInfo[] = [];
+    private cacheLoaded: boolean = false;
+
+    // Cache for layered packages (installed via rpm-ostree)
     private layeredPackages: string[] = [];
     private lastStatusCheck: number = 0;
-    private CACHE_TTL = 30000; // 30s
+    private LAYERED_CACHE_TTL = 30000; // 30s
 
     constructor() {
-        this.refreshStatus();
+        this.init();
+    }
+
+    private async init() {
+        console.log('[PackageService] Initializing...');
+        await this.refreshStatus();
+        this.loadPackageCache();
+    }
+
+    private loadPackageCache(): void {
+        try {
+            if (fs.existsSync(CACHE_FILE)) {
+                const data = fs.readFileSync(CACHE_FILE, 'utf-8');
+                const parsed = JSON.parse(data);
+
+                // Replace cache atomically (memory safe - old array gets GC'd)
+                this.packageCache = Array.isArray(parsed) ? parsed : [];
+                this.cacheLoaded = true;
+
+                console.log(`[PackageService] Loaded ${this.packageCache.length} packages from cache file`);
+            } else {
+                console.warn('[PackageService] No cache file found at', CACHE_FILE);
+                console.warn('[PackageService] Run bazzite_build.sh to generate the package cache');
+                this.packageCache = [];
+                this.cacheLoaded = false;
+            }
+        } catch (e: any) {
+            console.error('[PackageService] Failed to load package cache:', e.message);
+            this.packageCache = [];
+            this.cacheLoaded = false;
+        }
+    }
+
+    // Method to reload cache (can be called manually or on demand)
+    public reloadCache(): void {
+        this.loadPackageCache();
     }
 
     private async refreshStatus() {
         try {
-            // rpm-ostree status --json is ideal if available, but let's parse text for robustness if json fails or isn't perfect.
-            // Actually, `rpm-ostree status` text output:
-            // LayeredPackages: package1 package2 ...
             const { stdout } = await execAsync('rpm-ostree status');
             const lines = stdout.split('\n');
             const layeredLine = lines.find(l => l.trim().startsWith('LayeredPackages:'));
             if (layeredLine) {
-                // "          LayeredPackages: antigravity zerotier-one"
                 const parts = layeredLine.trim().split(':')[1].trim().split(/\s+/);
                 this.layeredPackages = parts.filter(p => p.length > 0);
             } else {
@@ -41,93 +77,54 @@ class PackageService {
             }
             this.lastStatusCheck = Date.now();
         } catch (e) {
-            console.error('[PackageService] Failed to get status:', e);
+            console.error('[PackageService] Failed to get rpm-ostree status:', e);
         }
     }
 
     public async getLayeredPackages(): Promise<string[]> {
-        if (Date.now() - this.lastStatusCheck > this.CACHE_TTL) {
+        if (Date.now() - this.lastStatusCheck > this.LAYERED_CACHE_TTL) {
             await this.refreshStatus();
         }
         return this.layeredPackages;
     }
 
-    public async search(query: string): Promise<PackageInfo[]> {
-        if (!query || query.length < 2) return [];
-        // Sanitize query to prevent injection
-        const safeQuery = query.replace(/[^a-zA-Z0-9\-\_\.]/g, '');
-
-        try {
-            // dnf search -C (cache only) is faster but might be stale. 
-            // dnf search is slow.
-            // limit to 20
-            const { stdout } = await execAsync(`dnf search "${safeQuery}" | head -n 40`);
-
-            // Output format:
-            // Last metadata expiration check: ...
-            // ================= Name Matches =================
-            // package.arch : Summary
-            // package.noarch : Summary
-
-            const results: PackageInfo[] = [];
-            const lines = stdout.split('\n');
-
-            for (const line of lines) {
-                if (line.includes(': ')) {
-                    const [pkgNameFull, summary] = line.split(': ');
-                    // pkgNameFull might be "firefox.x86_64" or "firefox"
-                    // clean it
-                    const nameParts = pkgNameFull.trim().split('.');
-                    const name = nameParts[0];
-                    const arch = nameParts.length > 1 ? nameParts[1] : undefined;
-
-                    // Filter out "Last metadata..."
-                    if (line.startsWith('Last metadata')) continue;
-                    if (line.startsWith('====')) continue;
-
-                    results.push({
-                        name,
-                        summary: summary?.trim() || '',
-                        arch
-                    });
-                }
-            }
-
-            // Deduplicate by name
-            const unique = new Map();
-            results.forEach(r => {
-                if (!unique.has(r.name)) unique.set(r.name, r);
-            });
-
-            return Array.from(unique.values());
-
-        } catch (e: any) {
-            console.error('[PackageService] Search failed:', e.message);
-            return [];
-        }
+    public getCacheStatus(): { loaded: boolean; count: number } {
+        return {
+            loaded: this.cacheLoaded,
+            count: this.packageCache.length
+        };
     }
 
-    // Installing/Uninstalling is LONG RUNNING.
-    // We should probably spawn and return a process ID or socket event stream.
-    // For MVP, we'll return a promise that resolves when done, but client might timeout?
-    // Better to return "Started" and emit events.
+    public search(query: string): PackageInfo[] {
+        if (!query || query.length < 2) return [];
+        if (!this.cacheLoaded) return [];
 
-    // But to match current pattern, let's keep it simple for now, maybe use systemControl pattern.
+        const lowerQuery = query.toLowerCase();
+
+        // Filter cached packages - simple substring match on name
+        const results = this.packageCache.filter(pkg =>
+            pkg.name.toLowerCase().includes(lowerQuery)
+        );
+
+        // Limit results to prevent large payloads
+        return results.slice(0, 50);
+    }
 
     public install(pkg: string) {
-        return this.runTransaction(`rpm-ostree install ${pkg} -y`);
+        const safePkg = pkg.replace(/[^a-zA-Z0-9\-\_\.]/g, '');
+        console.log('[PackageService] Installing:', safePkg);
+        return execAsync(`rpm-ostree install ${safePkg} -y`);
     }
 
     public uninstall(pkg: string) {
-        return this.runTransaction(`rpm-ostree uninstall ${pkg} -y`);
+        const safePkg = pkg.replace(/[^a-zA-Z0-9\-\_\.]/g, '');
+        console.log('[PackageService] Uninstalling:', safePkg);
+        return execAsync(`rpm-ostree uninstall ${safePkg} -y`);
     }
 
-    private runTransaction(command: string) {
-        // This returns a promise that resolves when the process exits.
-        // We might want to stream stdout to the global socket if possible?
-        // For now, let's just run it.
-        console.log('[PackageService] Running:', command);
-        return execAsync(command);
+    // Cleanup method for graceful shutdown
+    public destroy() {
+        this.packageCache = [];
     }
 }
 

@@ -39,17 +39,17 @@ const Dashboard: React.FC = () => {
 
     // Layout configuration
     const defaultLayout: RGL_Layout = [
-        { i: 'info', x: 0, y: 0, w: 3, h: 10, minW: 2, minH: 6 },
-        { i: 'cpu', x: 3, y: 0, w: 3, h: 8, minW: 3, minH: 6 },
-        { i: 'storage', x: 6, y: 0, w: 3, h: 4, minW: 2, minH: 4 },
-        { i: 'smart', x: 6, y: 4, w: 3, h: 4, minW: 2, minH: 4 },
-        { i: 'network', x: 9, y: 0, w: 3, h: 4, minW: 2, minH: 4 },
-        { i: 'controls', x: 9, y: 4, w: 3, h: 10, minW: 2, minH: 8 },
-        { i: 'steam', x: 6, y: 8, w: 6, h: 8, minW: 4, minH: 6 },
-        { i: 'files', x: 0, y: 10, w: 6, h: 8, minW: 4, minH: 6 },
-        { i: 'cleaner', x: 0, y: 18, w: 4, h: 8, minW: 3, minH: 6 },
-        { i: 'packages', x: 4, y: 18, w: 4, h: 8, minW: 3, minH: 6 },
-        { i: 'terminal', x: 0, y: 26, w: 12, h: 8, minW: 4, minH: 4 },
+        { i: 'info', x: 0, y: 0, w: 3, h: 10, minW: 1, minH: 5 },
+        { i: 'cpu', x: 3, y: 0, w: 3, h: 8, minW: 2, minH: 5 },
+        { i: 'storage', x: 6, y: 0, w: 3, h: 4, minW: 1, minH: 3 },
+        { i: 'smart', x: 6, y: 4, w: 3, h: 4, minW: 1, minH: 3 },
+        { i: 'network', x: 9, y: 0, w: 3, h: 4, minW: 1, minH: 3 },
+        { i: 'controls', x: 9, y: 4, w: 3, h: 10, minW: 1, minH: 7 },
+        { i: 'steam', x: 6, y: 8, w: 6, h: 8, minW: 3, minH: 5 },
+        { i: 'files', x: 0, y: 10, w: 6, h: 8, minW: 3, minH: 5 },
+        { i: 'cleaner', x: 0, y: 18, w: 4, h: 8, minW: 2, minH: 5 },
+        { i: 'packages', x: 4, y: 18, w: 4, h: 8, minW: 2, minH: 5 },
+        { i: 'terminal', x: 0, y: 26, w: 12, h: 8, minW: 3, minH: 3 },
     ];
 
     // Helper for migrating layouts
@@ -178,7 +178,13 @@ const Dashboard: React.FC = () => {
     };
 
     const toggleLayoutLock = () => {
+        const wasEditing = isDraggable;
         setIsDraggable(!isDraggable);
+
+        // Save layout when EXITING edit mode
+        if (wasEditing) {
+            socket?.emit('layout:save', { layouts, extras: extraTerminals });
+        }
     };
 
     const removeTerminalWidget = (id: string) => {

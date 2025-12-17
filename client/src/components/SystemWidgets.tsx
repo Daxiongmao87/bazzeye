@@ -254,8 +254,8 @@ export const StorageWidget: React.FC = () => {
                 {stats.storage.map((disk, i) => (
                     <div key={i}>
                         <div className="flex justify-between text-sm mb-1">
-                            <span>{disk.mount || disk.fs}</span>
-                            <span>{disk.use.toFixed(1)}%</span>
+                            <span className="truncate max-w-[48ch]" title={disk.mount || disk.fs}>{(disk.mount || disk.fs).slice(0, 48)}{(disk.mount || disk.fs).length > 48 ? '…' : ''}</span>
+                            <span className="ml-2 flex-shrink-0">{disk.use.toFixed(1)}%</span>
                         </div>
                         <div className="w-full bg-gray-700 rounded-full h-2">
                             <div

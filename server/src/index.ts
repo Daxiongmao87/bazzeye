@@ -257,8 +257,8 @@ io.on('connection', (socket) => {
     });
 
     // --- Package Manager Events ---
-    socket.on('package:search', async (query: string) => {
-        const results = await packageService.search(query);
+    socket.on('package:search', (query: string) => {
+        const results = packageService.search(query);
         socket.emit('package:search-results', results);
     });
 

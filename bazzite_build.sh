@@ -43,4 +43,13 @@ echo "Project Path: $CURRENT_DIR"
 # usage: npm run install:all && npm run build
 distrobox enter "$CONTAINER" -- bash -c "cd '$CURRENT_DIR' && npm run install:all && npm run build"
 
+# Generate Package Cache
+echo -e "${GREEN}Generating package cache...${NC}"
+mkdir -p "$CURRENT_DIR/server/storage"
+bash "$CURRENT_DIR/scripts/generate-package-cache.sh" "$CURRENT_DIR/server/storage/package-cache.json" 43
+
+CACHE_COUNT=$(grep -c '"name"' "$CURRENT_DIR/server/storage/package-cache.json" 2>/dev/null || echo "0")
+echo -e "${GREEN}Package cache generated with $CACHE_COUNT packages${NC}"
+
 echo -e "${GREEN}Build Complete!${NC}"
+
