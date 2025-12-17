@@ -225,6 +225,18 @@ export const CpuWidget: React.FC = () => {
     const latestNet = history.length > 0 ? history[history.length - 1].netMbps : 0;
     const latestIO = history.length > 0 ? history[history.length - 1].ioMBps : 0;
 
+    // Calculate dynamic Y-axis max: floor of 10, then 10% above highest visible value
+    const calculateYMax = () => {
+        if (history.length === 0) return 10;
+        let maxVal = 0;
+        for (const point of history) {
+            maxVal = Math.max(maxVal, point.cpu ?? 0, point.mem ?? 0, point.temp ?? 0, point.netMbps ?? 0, point.ioMBps ?? 0);
+        }
+        // Apply 10% headroom above max, with a floor of 10
+        return Math.max(10, Math.ceil(maxVal * 1.1));
+    };
+    const yMax = calculateYMax();
+
     return (
         <div className="h-full flex flex-col p-4">
             <div className="flex justify-between items-center mb-2">
@@ -250,7 +262,7 @@ export const CpuWidget: React.FC = () => {
                     <LineChart data={history}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                         <XAxis dataKey="time" hide />
-                        <YAxis domain={[0, 'auto']} />
+                        <YAxis domain={[0, yMax]} />
                         <Tooltip
                             contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151' }}
                             itemStyle={{ color: '#e5e7eb' }}
