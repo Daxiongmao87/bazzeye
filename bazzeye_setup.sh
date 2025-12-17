@@ -270,7 +270,7 @@ EOF
     CMD_SMARTCTL=$(command -v smartctl || echo "/usr/sbin/smartctl")
     CMD_UJUST=$(command -v ujust || echo "/usr/bin/ujust")
     CMD_RPMOSTREE=$(command -v rpm-ostree || echo "/usr/bin/rpm-ostree")
-    CMD_TEST=$(command -v test || echo "/usr/bin/test")
+    CMD_TEST="/usr/bin/test"  # Shell builtin, use explicit path
     CMD_FIND=$(command -v find || echo "/usr/bin/find")
     CMD_RM=$(command -v rm || echo "/usr/bin/rm")
     CMD_MKDIR=$(command -v mkdir || echo "/usr/bin/mkdir")
