@@ -8,6 +8,7 @@ class MonitorService {
     private logger: winston.Logger;
     private history: any[] = [];
     private readonly MAX_HISTORY = 60; // 2 minutes at 2s interval
+    private diskIOPrimed = false;
 
     constructor() {
         const logDir = path.join(__dirname, '../../logs');
@@ -28,12 +29,6 @@ class MonitorService {
                 transport
             ]
         });
-
-        // Prime systeminformation's internal state for per-second calculations
-        // These functions need a previous call to calculate delta rates
-        si.disksIO().catch(() => { });
-        si.networkStats().catch(() => { });
-        si.fsStats().catch(() => { });
     }
 
     public getHistory() {
@@ -42,6 +37,15 @@ class MonitorService {
 
     public async getStats() {
         try {
+            // Prime disk IO on first call - systeminformation needs a previous sample to calculate per-second rates
+            if (!this.diskIOPrimed) {
+                await si.disksIO();
+                await si.networkStats();
+                this.diskIOPrimed = true;
+                // Small delay to ensure the baseline is set
+                await new Promise(r => setTimeout(r, 100));
+            }
+
             const [cpu, mem, fsSize, networkStats, osInfo, networkInterfaces, cpuTemp, disksIO] = await Promise.all([
                 si.currentLoad(),
                 si.mem(),
