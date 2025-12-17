@@ -241,7 +241,9 @@ io.on('connection', (socket) => {
     });
 
     socket.on('files:list', async (path: string) => {
-        const result = await fileService.listFiles(path, authService.isSudo());
+        // Always use sudo for file listing - the bazzeye service user 
+        // doesn't have read access to user directories
+        const result = await fileService.listFiles(path, true);
         socket.emit('files:list-data', result);
     });
 
