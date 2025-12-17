@@ -228,11 +228,11 @@ const Dashboard: React.FC = () => {
                     Bazzeye
                 </h1>
                 <div className="flex gap-4">
+                    <button onClick={() => setShowSettingsModal(true)} className="bg-gray-800 hover:bg-gray-700 p-2 rounded border border-gray-700 text-gray-300" title="Security Settings">
+                        <Key size={16} />
+                    </button>
                     {isDraggable && (
                         <>
-                            <button onClick={() => setShowSettingsModal(true)} className="bg-gray-800 hover:bg-gray-700 p-2 rounded border border-gray-700 text-gray-300" title="Security Settings">
-                                <Key size={16} />
-                            </button>
                             <button onClick={addTerminalWidget} className="bg-green-700 hover:bg-green-600 px-3 py-1 rounded border border-green-500 text-sm flex items-center gap-1">
                                 <Plus size={16} /> Add Terminal Card
                             </button>

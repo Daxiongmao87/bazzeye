@@ -13,92 +13,68 @@
 -   **Web Terminal**: 
     -   Full XTerm.js integration.
     -   Multiple Tabs support.
-    -   Renaming capabilities.
-    -   Transparency toggle for overlay-style look.
-    -   Session persistence and restart.
--   **File Browser**: 
-    -   Explorer-like interface for navigating the host filesystem.
-    -   Address bar and history support.
--   **System Controls**:
-    -   **Update System**: Triggers `ujust update` (Bazzite specific) to keep your system fresh.
-    -   **Power**: Reboot and Shutdown controls.
--   **Modes**:
-    -   **User Mode**: Read-only view for safety.
-    -   **SUDO Mode**: Toggle in the UI to enable dangerous actions (Terminal input, File deletion, System updates).
+    -   **Persistent Layout**: Add/Remove terminal cards and save their positions.
+-   **System Actions (Bazzite/Ujust)**:
+    -   **One-click Actions**: Update System, Fix Proton Hangs, Restart Audio Services, and Run Benchmarks directly from the UI.
+    -   Powered by Bazzite's `ujust` command.
+-   **Package Manager**:
+    -   Search and Install DNF packages (via `rpm-ostree`).
+    -   View and remove layered packages.
+-   **Zero-Config Deployment**:
+    -   Dedicated build script for immutable OS environments.
+    -   No manual hacking of `node_modules` required—uses **Distrobox** for clean builds.
+-   **Security**:
+    -   **Password Protected Sudo Mode**: Secure critical actions (reboot, terminal input, uninstalls) with a custom password.
+    -   **Session Timeout**: Sudo mode auto-locks after inactivity.
 
-## Installation
+## Installation on Bazzite
 
-### Prerequisites
--   Node.js (v18+)
--   Linux Host (Designed for Bazzite/Fedora Atomic, but works on generic Linux)
+Bazzeye is designed to be built on Bazzite (an immutable/atomic OS) without modifying the base system. We use **Distrobox** to handle the build environment.
 
-### Manual Setup
+### 1. Clone the repository
+```bash
+git clone https://github.com/Daxiongmao87/bazzeye.git
+cd bazzeye
+```
 
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/Daxiongmao87/bazzeye.git
-    cd bazzeye
-    ```
+### 2. Build with One Script
+We provide a helper script that spins up a Fedora container, installs dependencies, and builds the project for you:
 
-2.  Install Dependencies:
-    ```bash
-    cd server && npm install
-    cd ../client && npm install
-    ```
+```bash
+./bazzite_build.sh
+```
+*This will create a `bazzeye-builder` distrobox container and compile the application.*
 
-3.  Build:
-    ```bash
-    # Build both client and server
-    cd client && npm run build
-    cd ../server && npm run build
-    ```
+### 3. Run Manually (Testing)
+```bash
+cd server
+sudo node dist/index.js
+```
+Access at `http://localhost:3000` (or your IP).
 
-4.  Run:
-    ```bash
-    cd server
-    sudo node dist/index.js
-    ```
-    *   **Note**: Running as `root` (sudo) is recommended to allow System Updates (`rpm-ostree`), Power Controls (`shutdown`), and binding to Port 80.
+### 4. Install as System Service
+To run automatically on boot:
 
-## Running as a Service
-
-### Root Service (Recommended for full features)
-
-1.  Edit `bazzeye.service` to match your paths.
-2.  Copy to system directory:
+1.  Edit `bazzeye.service` to match your paths (default assumes `/root/bazzeye`).
+2.  Install and start:
     ```bash
     sudo cp bazzeye.service /etc/systemd/system/
-    ```
-3.  Enable and Start:
-    ```bash
     sudo systemctl daemon-reload
     sudo systemctl enable --now bazzeye
     ```
-
-### User Service (Limited features)
-
-If you prefer not to run as root:
-
-1.  Edit `bazzeye-user.service` to match your paths.
-2.  Copy to user directory:
-    ```bash
-    mkdir -p ~/.config/systemd/user/
-    cp bazzeye-user.service ~/.config/systemd/user/bazzeye.service
-    ```
-3.  Enable and Start:
-    ```bash
-    systemctl --user daemon-reload
-    systemctl --user enable --now bazzeye
-    ```
-    *   **Note**: Power controls and System Updates may fail without passwordless sudo rules. Port 80 will not be available (defaulting to 8080).
 
 ## Usage
 
 Access the dashboard at `http://<your-ip-address>`.
 
--   **Edit Mode**: Click the Cog icon to move/resize widgets.
--   **Lock Layout**: Click the Cog again to freeze widgets.
--   **Sudo Mode**: Click the Shield icon to enable/disable write access.
+*   **Edit Layout**: Click the **Settings (Cog)** icon to unlock the grid. You can then resize/move widgets or add new Terminal Cards (Plus icon).
+*   **Security**: Click the **Key** icon to set/change your dashboard password.
+*   **Sudo Mode**: Click the **Shield** icon to unlock administrative features (requires password if set).
+
+## Troubleshooting
+
+-   **Build Fails?**: Ensure you have `distrobox` installed (standard on Bazzite). Run `./bazzite_build.sh` again to retry.
+-   **"npm not found"?**: Do not run `npm install` directly on the host. Use the build script.
 
 ## License
 
