@@ -6,10 +6,10 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/bazzeye
-ExecStart=/root/bazzeye/node/bin/node /root/bazzeye/server/dist/index.js
+ExecStart=/usr/bin/node /root/bazzeye/server/dist/index.js
 Restart=on-failure
 Environment=NODE_ENV=production
-Environment=PORT=80
+Environment=PORT=3000
 
 [Install]
 WantedBy=multi-user.target

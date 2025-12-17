@@ -5,7 +5,7 @@
 set -e
 
 CONTAINER="bazzeye-builder"
-IMAGE="registry.fedoraproject.org/fedora:latest"
+IMAGE="registry.fedoraproject.org/fedora:43"
 CURRENT_DIR="$(pwd)"
 
 # Colors
