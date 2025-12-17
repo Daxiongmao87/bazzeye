@@ -41,21 +41,21 @@ cd bazzeye
 We provide a helper script that spins up a Fedora container, installs dependencies, and builds the project for you:
 
 ```bash
-./bazzite_build.sh
+```bash
+./bazzeye_setup.sh
 ```
-*This will create a `bazzeye-builder` distrobox container and compile the application.*
+*This will create a temporary distrobox container to build the app, then download a portable Node.js runtime for execution.*
 
 ### 3. Run Manually (Testing)
 ```bash
-cd server
-sudo node dist/index.js
+./start_server.sh
 ```
 Access at `http://localhost:3000` (or your IP).
 
 ### 4. Install as System Service
 To run automatically on boot:
 
-1.  Edit `bazzeye.service` to match your paths (default assumes `/root/bazzeye`).
+1.  Edit `bazzeye.service` if your install path is not `/root/bazzeye`.
 2.  Install and start:
     ```bash
     sudo cp bazzeye.service /etc/systemd/system/
@@ -73,8 +73,8 @@ Access the dashboard at `http://<your-ip-address>`.
 
 ## Troubleshooting
 
--   **Build Fails?**: Ensure you have `distrobox` installed (standard on Bazzite). Run `./bazzite_build.sh` again to retry.
--   **"npm not found"?**: Do not run `npm install` directly on the host. Use the build script.
+-   **Build Fails?**: Ensure you have `distrobox` installed (standard on Bazzite). Run `./bazzeye_setup.sh` again to retry.
+-   **"npm not found"?**: Do not run `npm install` directly on the host. Use the setup script.
 
 ## License
 

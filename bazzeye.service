@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/root/bazzeye
-ExecStart=/usr/bin/node /root/bazzeye/server/dist/index.js
+ExecStart=/root/bazzeye/runtime/node/bin/node /root/bazzeye/server/dist/index.js
 Restart=on-failure
 Environment=NODE_ENV=production
 Environment=PORT=3000

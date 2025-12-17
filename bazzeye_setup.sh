@@ -64,6 +64,10 @@ echo -e "${GREEN}Package cache generated with $CACHE_COUNT packages${NC}"
 
 echo -e "${GREEN}Build Complete!${NC}"
 
+# Cleanup
+echo "Cleaning up build container..."
+distrobox rm $DBX_FLAGS -f "$CONTAINER" || echo "Warning: Failed to remove container $CONTAINER"
+
 # Runtime Setup
 echo -e "${GREEN}Setting up Runtime Environment...${NC}"
 NODE_VERSION="v22.12.0"
