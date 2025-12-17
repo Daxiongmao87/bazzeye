@@ -35,7 +35,6 @@ const Dashboard: React.FC = () => {
     const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
     const [oldPasswordInput, setOldPasswordInput] = useState('');
     const [authError, setAuthError] = useState<string | null>(null);
-    const [authError, setAuthError] = useState<string | null>(null);
     const [authSuccess, setAuthSuccess] = useState<string | null>(null);
 
     // Notifications state
