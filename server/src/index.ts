@@ -47,8 +47,14 @@ console.log('Serving static files from:', staticPath);
 app.use(express.static(staticPath));
 
 // SPA Fallback
-app.get(/.*/, (req, res) => {
-    res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
+app.use((req, res) => {
+    console.log('SPA Fallback hit for:', req.url);
+    res.sendFile(path.join(__dirname, '../../client/dist/index.html'), (err) => {
+        if (err) {
+            console.error('SendFile error:', err);
+            res.status(500).send('Error loading frontend');
+        }
+    });
 });
 
 io.on('connection', (socket) => {
