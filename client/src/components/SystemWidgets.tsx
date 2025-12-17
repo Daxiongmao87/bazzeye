@@ -216,9 +216,86 @@ const BiosSection: React.FC = () => {
     );
 };
 
+
+export interface AlertSettings {
+    enabled: boolean;
+    warningTemp: number;
+    criticalTemp: number;
+    sustainedSeconds: number;
+}
+
 // Breaking down for Grid
-export const CpuWidget: React.FC = () => {
+export const CpuWidget: React.FC<{ settings?: AlertSettings }> = ({ settings }) => {
     const { stats, history } = useSystemData();
+    const [alertLevel, setAlertLevel] = React.useState<'normal' | 'warning' | 'critical'>('normal');
+    const warningStartTime = React.useRef<number | null>(null);
+    const lastNotificationTime = React.useRef<number>(0);
+
+    // Alert Logic
+    React.useEffect(() => {
+        if (!stats || !settings?.enabled) {
+            setAlertLevel('normal');
+            warningStartTime.current = null;
+            return;
+        }
+
+        const temp = stats.cpu.temp;
+        const now = Date.now();
+
+        // Check Critical
+        if (temp >= settings.criticalTemp) {
+            setAlertLevel('critical');
+            warningStartTime.current = null; // Reset warning timer as critical takes precedence
+
+            // Send notification if not sent in last 60 seconds
+            if (now - lastNotificationTime.current > 60000) {
+                if (Notification.permission === 'granted') {
+                    new Notification('CRITICAL TEMPERATURE ALERT', {
+                        body: `CPU Temperature is ${temp.toFixed(1)}°C!`,
+                        icon: '/favicon.ico' // Assuming favicon exists
+                    });
+                    lastNotificationTime.current = now;
+                }
+            }
+            return;
+        }
+
+        // Check Warning
+        if (temp >= settings.warningTemp) {
+            if (warningStartTime.current === null) {
+                warningStartTime.current = now;
+            } else {
+                const elapsedSeconds = (now - warningStartTime.current) / 1000;
+                if (elapsedSeconds >= settings.sustainedSeconds) {
+                    setAlertLevel('warning');
+
+                    // Send notification if not sent in last 5 minutes for warning
+                    if (now - lastNotificationTime.current > 300000) {
+                        if (Notification.permission === 'granted') {
+                            new Notification('Temperature Warning', {
+                                body: `CPU Temperature sustained above ${settings.warningTemp}°C for ${settings.sustainedSeconds}s.`,
+                            });
+                            lastNotificationTime.current = now;
+                        }
+                    }
+                }
+            }
+        } else {
+            // Back to normal
+            setAlertLevel('normal');
+            warningStartTime.current = null;
+        }
+
+    }, [stats, settings]);
+
+    // Request notification permission on mount if enabled
+    React.useEffect(() => {
+        if (settings?.enabled && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    }, [settings?.enabled]);
+
+
     if (!stats) return <div className="text-gray-400 p-4">Loading stats...</div>;
 
     // Get latest values for display
@@ -237,8 +314,14 @@ export const CpuWidget: React.FC = () => {
     };
     const yMax = calculateYMax();
 
+    const getBorderClass = () => {
+        if (alertLevel === 'critical') return 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]';
+        if (alertLevel === 'warning') return 'border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]';
+        return ''; // Default border handled by parent or empty
+    };
+
     return (
-        <div className="h-full flex flex-col p-4">
+        <div className={`h-full flex flex-col p-4 transition-all duration-300 rounded-xl ${getBorderClass()}`}>
             <div className="flex justify-between items-center mb-2">
                 <h2 className="text-xl font-semibold flex items-center gap-2">
                     <Activity size={20} className="text-blue-400" /> Performance

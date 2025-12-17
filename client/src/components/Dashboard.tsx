@@ -10,7 +10,7 @@ import type { Layout as RGL_Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
-import { CpuWidget, StorageWidget, SystemInfoWidget, SystemDataProvider } from './SystemWidgets';
+import { CpuWidget, StorageWidget, SystemInfoWidget, SystemDataProvider, AlertSettings } from './SystemWidgets';
 import SteamWidget from './SteamWidget';
 import TerminalWidget from './TerminalWidget';
 import SystemControlWidget from './SystemControlWidget';
@@ -29,6 +29,31 @@ const Dashboard: React.FC = () => {
     const [showSetupModal, setShowSetupModal] = useState(false);
     const [showUnlockModal, setShowUnlockModal] = useState(false);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+    // Alert Settings
+    const [alertSettings, setAlertSettings] = useState<AlertSettings>({
+        enabled: true,
+        warningTemp: 80,
+        criticalTemp: 95,
+        sustainedSeconds: 60
+    });
+
+    // Load Alert Settings
+    useEffect(() => {
+        const saved = localStorage.getItem('bazzeye_alert_settings');
+        if (saved) {
+            try {
+                setAlertSettings(JSON.parse(saved));
+            } catch (e) {
+                console.error('Failed to parse alert settings', e);
+            }
+        }
+    }, []);
+
+    // Save Alert Settings
+    useEffect(() => {
+        localStorage.setItem('bazzeye_alert_settings', JSON.stringify(alertSettings));
+    }, [alertSettings]);
 
     // Auth Input State
     const [passwordInput, setPasswordInput] = useState('');
@@ -306,9 +331,9 @@ const Dashboard: React.FC = () => {
                                 <SystemInfoWidget />
                             </div>
 
-                            <div key="cpu" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <CpuWidget />
-                            </div>
+                            <div key="cpu" className="bg-gray-800/80 rounded-xl border border-gray-700 overflow-hidden backdrop-blur-sm shadow-xl">
+                        <CpuWidget settings={alertSettings} />
+                    </div>        </div>
                             <div key="storage" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
                                 <StorageWidget />
                             </div>
@@ -325,193 +350,261 @@ const Dashboard: React.FC = () => {
                             </div>
 
                             {/* Cleaner Widget */}
-                            <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <CleanerWidget />
-                            </div>
+                    <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                        <CleanerWidget />
+                    </div>
 
-                            <div key="packages" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <PackageWidget />
-                            </div>
+                    <div key="packages" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                        <PackageWidget />
+                    </div>
 
-                            {extraTerminals.map(id => (
-                                <div key={id} className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
-                                    {isDraggable && (
-                                        <button
-                                            onClick={() => removeTerminalWidget(id)}
-                                            className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            title="Remove Widget"
-                                        >
-                                            <X size={12} />
-                                        </button>
-                                    )}
-                                    <TerminalWidget widgetId={id} isEditing={isDraggable} />
-                                </div>
-                            ))}
+                    {extraTerminals.map(id => (
+                        <div key={id} className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                            {isDraggable && (
+                                <button
+                                    onClick={() => removeTerminalWidget(id)}
+                                    className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Remove Widget"
+                                >
+                                    <X size={12} />
+                                </button>
+                            )}
+                            <TerminalWidget widgetId={id} isEditing={isDraggable} />
+                        </div>
+                    ))}
 
-                            <div key="controls" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <SystemControlWidget />
-                            </div>
+                    <div key="controls" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                        <SystemControlWidget />
+                    </div>
 
-                            <div key="files" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <FileBrowserWidget />
-                            </div>
-                        </ResponsiveGrid>
+                    <div key="files" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                        <FileBrowserWidget />
+                    </div>
+                </ResponsiveGrid>
                     )}
+        </div>
+            </SystemDataProvider >
+
+    {/* Auth Modals */ }
+
+{/* 1. Setup Modal (First Run or Reset) */ }
+{
+    showSetupModal && (
+        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center backdrop-blur-md">
+            <div className="bg-gray-900 border border-gray-700 p-8 rounded-2xl shadow-2xl max-w-md w-full">
+                <div className="flex justify-center mb-6 text-blue-500"><Shield size={64} /></div>
+                <h2 className="text-2xl font-bold text-center mb-2 text-white">Secure Your Dashboard</h2>
+                <p className="text-gray-400 text-center mb-6">Set a password to protect Sudo actions (Reboot, Terminal, etc.).</p>
+
+                {authError && <div className="bg-red-900/50 text-red-200 p-3 rounded mb-4 text-center text-sm">{authError}</div>}
+
+                <input
+                    type="password"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-4 py-3 mb-3 text-white focus:border-blue-500 outline-none"
+                    placeholder="Data Password"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                />
+                <input
+                    type="password"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-4 py-3 mb-6 text-white focus:border-blue-500 outline-none"
+                    placeholder="Confirm Password"
+                    value={confirmPasswordInput}
+                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                />
+
+                <button
+                    onClick={() => {
+                        if (passwordInput !== confirmPasswordInput) {
+                            setAuthError("Passwords do not match");
+                            return;
+                        }
+                        if (!passwordInput) {
+                            setAuthError("Password cannot be empty");
+                            return;
+                        }
+                        socket?.emit('auth:set-password', { password: passwordInput });
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors mb-3"
+                >
+                    <span className="flex items-center justify-center gap-2"><Lock size={18} /> Set Password</span>
+                </button>
+
+                <button
+                    onClick={() => {
+                        if (confirm("Running without a password is NOT recommended. Anyone on the network can control this server. Are you sure?")) {
+                            socket?.emit('auth:set-password', { password: '' });
+                        }
+                    }}
+                    className="w-full text-gray-500 hover:text-gray-300 text-sm py-2"
+                >
+                    Skip (Not Recommended)
+                </button>
+            </div>
+        </div>
+    )
+}
+
+{/* 2. Unlock Modal (Challenge) */ }
+{
+    showUnlockModal && (
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm">
+            <div className="bg-gray-900 border border-gray-700 p-6 rounded-xl shadow-2xl max-w-sm w-full">
+                <div className="flex justify-center mb-4 text-yellow-500"><Lock size={48} /></div>
+                <h2 className="text-xl font-bold text-center mb-4 text-white">Password Required</h2>
+
+                {authError && <div className="bg-red-900/50 text-red-200 p-2 rounded mb-4 text-center text-sm">{authError}</div>}
+
+                <input
+                    type="password"
+                    autoFocus
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 mb-4 text-white focus:border-yellow-500 outline-none"
+                    placeholder="Password..."
+                    value={passwordInput}
+                    onChange={(e) => { setPasswordInput(e.target.value); setAuthError(null); }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            socket?.emit('auth:verify-password', passwordInput);
+                            setPasswordInput('');
+                        }
+                    }}
+                />
+                <div className="flex gap-2">
+                    <button onClick={() => { setShowUnlockModal(false); setPasswordInput(''); setAuthError(null); }} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded">Cancel</button>
+                    <button onClick={() => { socket?.emit('auth:verify-password', passwordInput); setPasswordInput(''); }} className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white py-2 rounded">Unlock</button>
                 </div>
-            </SystemDataProvider>
+            </div>
+        </div>
+    )
+}
 
-            {/* Auth Modals */}
+{/* 3. Settings Modal (Password Mgmt) */ }
+{
+    showSettingsModal && (
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm">
+            <div className="bg-gray-900 border border-gray-700 p-6 rounded-xl shadow-2xl max-w-md w-full relative">
+                <button onClick={() => setShowSettingsModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20} /></button>
+                <h2 className="text-xl font-bold mb-6 text-white flex items-center gap-2"><Settings size={24} /> Security Settings</h2>
 
-            {/* 1. Setup Modal (First Run or Reset) */}
-            {showSetupModal && (
-                <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center backdrop-blur-md">
-                    <div className="bg-gray-900 border border-gray-700 p-8 rounded-2xl shadow-2xl max-w-md w-full">
-                        <div className="flex justify-center mb-6 text-blue-500"><Shield size={64} /></div>
-                        <h2 className="text-2xl font-bold text-center mb-2 text-white">Secure Your Dashboard</h2>
-                        <p className="text-gray-400 text-center mb-6">Set a password to protect Sudo actions (Reboot, Terminal, etc.).</p>
+                {authSuccess && <div className="bg-green-900/50 text-green-200 p-3 rounded mb-4 text-center text-sm">{authSuccess}</div>}
+                {authError && <div className="bg-red-900/50 text-red-200 p-3 rounded mb-4 text-center text-sm">{authError}</div>}
 
-                        {authError && <div className="bg-red-900/50 text-red-200 p-3 rounded mb-4 text-center text-sm">{authError}</div>}
-
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-gray-400 text-xs uppercase font-bold mb-2">Change Password</label>
                         <input
                             type="password"
-                            className="w-full bg-gray-800 border border-gray-700 rounded px-4 py-3 mb-3 text-white focus:border-blue-500 outline-none"
-                            placeholder="Data Password"
+                            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:border-blue-500 outline-none mb-2"
+                            placeholder="Old Password (if set)"
+                            value={oldPasswordInput}
+                            onChange={(e) => setOldPasswordInput(e.target.value)}
+                        />
+                        <input
+                            type="password"
+                            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:border-blue-500 outline-none mb-2"
+                            placeholder="New Password"
                             value={passwordInput}
                             onChange={(e) => setPasswordInput(e.target.value)}
                         />
                         <input
                             type="password"
-                            className="w-full bg-gray-800 border border-gray-700 rounded px-4 py-3 mb-6 text-white focus:border-blue-500 outline-none"
-                            placeholder="Confirm Password"
+                            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:border-blue-500 outline-none"
+                            placeholder="Confirm New Password"
                             value={confirmPasswordInput}
                             onChange={(e) => setConfirmPasswordInput(e.target.value)}
                         />
-
-                        <button
-                            onClick={() => {
-                                if (passwordInput !== confirmPasswordInput) {
-                                    setAuthError("Passwords do not match");
-                                    return;
-                                }
-                                if (!passwordInput) {
-                                    setAuthError("Password cannot be empty");
-                                    return;
-                                }
-                                socket?.emit('auth:set-password', { password: passwordInput });
-                            }}
-                            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors mb-3"
-                        >
-                            <span className="flex items-center justify-center gap-2"><Lock size={18} /> Set Password</span>
-                        </button>
-
-                        <button
-                            onClick={() => {
-                                if (confirm("Running without a password is NOT recommended. Anyone on the network can control this server. Are you sure?")) {
-                                    socket?.emit('auth:set-password', { password: '' });
-                                }
-                            }}
-                            className="w-full text-gray-500 hover:text-gray-300 text-sm py-2"
-                        >
-                            Skip (Not Recommended)
-                        </button>
                     </div>
-                </div>
-            )}
 
-            {/* 2. Unlock Modal (Challenge) */}
-            {showUnlockModal && (
-                <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm">
-                    <div className="bg-gray-900 border border-gray-700 p-6 rounded-xl shadow-2xl max-w-sm w-full">
-                        <div className="flex justify-center mb-4 text-yellow-500"><Lock size={48} /></div>
-                        <h2 className="text-xl font-bold text-center mb-4 text-white">Password Required</h2>
+                    <button
+                        onClick={() => {
+                            if (passwordInput !== confirmPasswordInput) { setAuthError('Passwords do not match'); return; }
+                            socket?.emit('auth:set-password', { password: passwordInput, oldPassword: oldPasswordInput });
+                        }}
+                        className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 rounded"
+                    >
+                        Update Password
+                    </button>
 
-                        {authError && <div className="bg-red-900/50 text-red-200 p-2 rounded mb-4 text-center text-sm">{authError}</div>}
+                    <div className="border-t border-gray-800 my-4"></div>
 
+                </button>
+
+                <div className="border-t border-gray-800 my-4"></div>
+
+                {/* Temperature Alert Settings */}
+                <div>
+                    <label className="block text-gray-300 text-sm font-bold mb-3 flex justify-between items-center">
+                        <span>Temperature Alerts</span>
                         <input
-                            type="password"
-                            autoFocus
-                            className="w-full bg-gray-800 border border-gray-700 rounded px-4 py-2 mb-4 text-white focus:border-yellow-500 outline-none"
-                            placeholder="Password..."
-                            value={passwordInput}
-                            onChange={(e) => { setPasswordInput(e.target.value); setAuthError(null); }}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    socket?.emit('auth:verify-password', passwordInput);
-                                    setPasswordInput('');
-                                }
-                            }}
+                            type="checkbox"
+                            checked={alertSettings.enabled}
+                            onChange={(e) => setAlertSettings({ ...alertSettings, enabled: e.target.checked })}
+                            className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
                         />
-                        <div className="flex gap-2">
-                            <button onClick={() => { setShowUnlockModal(false); setPasswordInput(''); setAuthError(null); }} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded">Cancel</button>
-                            <button onClick={() => { socket?.emit('auth:verify-password', passwordInput); setPasswordInput(''); }} className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white py-2 rounded">Unlock</button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                    </label>
 
-            {/* 3. Settings Modal (Password Mgmt) */}
-            {showSettingsModal && (
-                <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm">
-                    <div className="bg-gray-900 border border-gray-700 p-6 rounded-xl shadow-2xl max-w-md w-full relative">
-                        <button onClick={() => setShowSettingsModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white"><X size={20} /></button>
-                        <h2 className="text-xl font-bold mb-6 text-white flex items-center gap-2"><Settings size={24} /> Security Settings</h2>
-
-                        {authSuccess && <div className="bg-green-900/50 text-green-200 p-3 rounded mb-4 text-center text-sm">{authSuccess}</div>}
-                        {authError && <div className="bg-red-900/50 text-red-200 p-3 rounded mb-4 text-center text-sm">{authError}</div>}
-
-                        <div className="space-y-4">
+                    {alertSettings.enabled && (
+                        <div className="space-y-3 pl-2 border-l-2 border-gray-800">
                             <div>
-                                <label className="block text-gray-400 text-xs uppercase font-bold mb-2">Change Password</label>
+                                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                    <span>Warning Threshold (°C)</span>
+                                    <span className="text-amber-400">{alertSettings.warningTemp}°C</span>
+                                </div>
                                 <input
-                                    type="password"
-                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:border-blue-500 outline-none mb-2"
-                                    placeholder="Old Password (if set)"
-                                    value={oldPasswordInput}
-                                    onChange={(e) => setOldPasswordInput(e.target.value)}
-                                />
-                                <input
-                                    type="password"
-                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:border-blue-500 outline-none mb-2"
-                                    placeholder="New Password"
-                                    value={passwordInput}
-                                    onChange={(e) => setPasswordInput(e.target.value)}
-                                />
-                                <input
-                                    type="password"
-                                    className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white focus:border-blue-500 outline-none"
-                                    placeholder="Confirm New Password"
-                                    value={confirmPasswordInput}
-                                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                                    type="range" min="50" max="100" step="1"
+                                    value={alertSettings.warningTemp}
+                                    onChange={(e) => setAlertSettings({ ...alertSettings, warningTemp: parseInt(e.target.value) })}
+                                    className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                                 />
                             </div>
 
-                            <button
-                                onClick={() => {
-                                    if (passwordInput !== confirmPasswordInput) { setAuthError('Passwords do not match'); return; }
-                                    socket?.emit('auth:set-password', { password: passwordInput, oldPassword: oldPasswordInput });
-                                }}
-                                className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2 rounded"
-                            >
-                                Update Password
-                            </button>
+                            <div>
+                                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                    <span>Critical Threshold (°C)</span>
+                                    <span className="text-red-400">{alertSettings.criticalTemp}°C</span>
+                                </div>
+                                <input
+                                    type="range" min="60" max="110" step="1"
+                                    value={alertSettings.criticalTemp}
+                                    onChange={(e) => setAlertSettings({ ...alertSettings, criticalTemp: parseInt(e.target.value) })}
+                                    className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                />
+                            </div>
 
-                            <div className="border-t border-gray-800 my-4"></div>
-
-                            <button
-                                onClick={() => {
-                                    if (confirm("Remove password protection? This is not safe.")) {
-                                        socket?.emit('auth:set-password', { password: '', oldPassword: oldPasswordInput });
-                                    }
-                                }}
-                                className="w-full bg-red-900/30 hover:bg-red-900/50 text-red-300 font-semibold py-2 rounded border border-red-900/50"
-                            >
-                                Remove Password Protection
-                            </button>
+                            <div>
+                                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                    <span>Sustained Duration (seconds)</span>
+                                    <span className="text-blue-400">{alertSettings.sustainedSeconds}s</span>
+                                </div>
+                                <input
+                                    type="range" min="5" max="300" step="5"
+                                    value={alertSettings.sustainedSeconds}
+                                    onChange={(e) => setAlertSettings({ ...alertSettings, sustainedSeconds: parseInt(e.target.value) })}
+                                    className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                />
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
-            )}
+
+                <div className="border-t border-gray-800 my-4"></div>
+
+                <button
+                    onClick={() => {
+                        if (confirm("Remove password protection? This is not safe.")) {
+                            socket?.emit('auth:set-password', { password: '', oldPassword: oldPasswordInput });
+                        }
+                    }}
+                    className="w-full bg-red-900/30 hover:bg-red-900/50 text-red-300 font-semibold py-2 rounded border border-red-900/50"
+                >
+                    Remove Password Protection
+                </button>
+            </div>
         </div>
+    )
+}
+            </div >
+        </SystemDataProvider >
     );
 };
 export default Dashboard;
