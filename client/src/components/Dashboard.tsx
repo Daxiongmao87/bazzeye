@@ -16,9 +16,8 @@ import TerminalWidget from './TerminalWidget';
 import SystemControlWidget from './SystemControlWidget';
 import FileBrowserWidget from './FileBrowserWidget';
 import SmartWidget from './SmartWidget';
-import { UjustWidget } from './UjustWidget';
 import { PackageWidget } from './PackageWidget';
-import { CleanerWidget } from './CleanerWidget'; // [NEW]
+import { CleanerWidget } from './CleanerWidget';
 import { BazzeyeLogo } from './BazzeyeLogo';
 
 const Dashboard: React.FC = () => {
@@ -45,12 +44,11 @@ const Dashboard: React.FC = () => {
         { i: 'storage', x: 6, y: 0, w: 3, h: 4, minW: 2, minH: 4 },
         { i: 'smart', x: 6, y: 4, w: 3, h: 4, minW: 2, minH: 4 },
         { i: 'network', x: 9, y: 0, w: 3, h: 4, minW: 2, minH: 4 },
-        { i: 'controls', x: 9, y: 4, w: 3, h: 6, minW: 2, minH: 6 },
+        { i: 'controls', x: 9, y: 4, w: 3, h: 10, minW: 2, minH: 8 },
         { i: 'steam', x: 6, y: 8, w: 6, h: 8, minW: 4, minH: 6 },
         { i: 'files', x: 0, y: 10, w: 6, h: 8, minW: 4, minH: 6 },
-        { i: 'ujust', x: 0, y: 18, w: 4, h: 8, minW: 3, minH: 6 },
-        { i: 'cleaner', x: 4, y: 18, w: 4, h: 8, minW: 3, minH: 6 }, // [NEW]
-        { i: 'packages', x: 8, y: 18, w: 4, h: 8, minW: 3, minH: 6 },
+        { i: 'cleaner', x: 0, y: 18, w: 4, h: 8, minW: 3, minH: 6 },
+        { i: 'packages', x: 4, y: 18, w: 4, h: 8, minW: 3, minH: 6 },
         { i: 'terminal', x: 0, y: 26, w: 12, h: 8, minW: 4, minH: 4 },
     ];
 
@@ -132,6 +130,13 @@ const Dashboard: React.FC = () => {
         socket.on('auth:needs-setup', () => setShowSetupModal(true));
         socket.on('auth:require-password', () => setShowUnlockModal(true)); // Challenge
 
+        // Session check - show password prompt if sudo was previously enabled
+        socket.on('auth:session-check', (data: { needsPassword: boolean; sudoWasEnabled: boolean }) => {
+            if (data.needsPassword) {
+                setShowUnlockModal(true);
+            }
+        });
+
         socket.on('auth:verify-success', () => {
             setShowUnlockModal(false);
             setAuthError(null);
@@ -158,6 +163,7 @@ const Dashboard: React.FC = () => {
             socket.off('layout:updated');
             socket.off('auth:needs-setup');
             socket.off('auth:require-password');
+            socket.off('auth:session-check');
             socket.off('auth:verify-success');
             socket.off('auth:verify-fail');
             socket.off('auth:set-password-success');
@@ -296,12 +302,7 @@ const Dashboard: React.FC = () => {
                                 <TerminalWidget widgetId="terminal" isEditing={isDraggable} />
                             </div>
 
-                            {/* [NEW] Ujust Widget */}
-                            <div key="ujust" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <UjustWidget />
-                            </div>
-
-                            {/* [NEW] Cleaner Widget */}
+                            {/* Cleaner Widget */}
                             <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
                                 <CleanerWidget />
                             </div>

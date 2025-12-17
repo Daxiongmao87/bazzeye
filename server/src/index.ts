@@ -30,12 +30,15 @@ import { systemControlService } from './services/SystemControlService';
 import { fileService } from './services/FileService';
 import { packageService } from './services/PackageService';
 import { layoutService } from './services/LayoutService'; // [NEW]
+import { cleanerScheduleService } from './services/CleanerScheduleService';
 
 import multer from 'multer';
 import path from 'path';
 
 steamService.setSocket(io);
 systemControlService.setSocket(io); // [NEW] Wire system control
+cleanerScheduleService.setSocket(io);
+cleanerScheduleService.setCleanFunction(() => systemControlService.runCleanSystem());
 
 const upload = multer({ dest: '/tmp/bazzeye-uploads' });
 
@@ -58,6 +61,11 @@ io.on('connection', (socket) => {
     if (!authService.hasPassword()) {
         socket.emit('auth:needs-setup');
     }
+
+    // Check if returning user needs to re-authenticate
+    const sessionCheck = authService.checkSession();
+    socket.emit('auth:session-check', sessionCheck);
+
 
     // Send history
     socket.emit('system-stats-history', monitorService.getHistory());
@@ -181,6 +189,17 @@ io.on('connection', (socket) => {
             status: result.success ? 'success' : 'error',
             output: result.output
         });
+    });
+
+    // --- Cleaner Schedule Events ---
+    socket.on('cleaner:get-schedule', () => {
+        socket.emit('cleaner:schedule-status', cleanerScheduleService.getSchedule());
+    });
+
+    socket.on('cleaner:set-schedule', ({ enabled, intervalHours }: { enabled: boolean, intervalHours: number }) => {
+        if (!authService.isSudo()) return;
+        const schedule = cleanerScheduleService.setSchedule(enabled, intervalHours);
+        io.emit('cleaner:schedule-status', schedule);
     });
 
     socket.on('system:specs', async () => {
@@ -314,6 +333,7 @@ const smartInterval = setInterval(async () => {
 process.on('SIGTERM', () => {
     clearInterval(statsInterval);
     clearInterval(smartInterval);
+    cleanerScheduleService.destroy();
     process.exit(0);
 });
 
