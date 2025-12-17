@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcrypt';
+import { exec } from 'child_process';
 
 interface AuthConfig {
     passwordHash: string | null;
@@ -13,6 +14,7 @@ class AuthService {
     private sudoEnabled: boolean = false; // Persisted preference
     private authFile: string;
     private passwordHash: string | null = null;
+
     private sessionExpiry: NodeJS.Timeout | null = null;
 
     constructor() {
@@ -90,7 +92,7 @@ class AuthService {
         } else {
             // Turning on
             if (!this.passwordHash) {
-                // No password, allow immediately but maybe warn?
+                // No password, allow immediately
                 this.setSudo(true);
                 return { success: true, requiresPassword: false };
             } else {
@@ -103,13 +105,33 @@ class AuthService {
     public setSudo(enable: boolean): void {
         this.sudoMode = enable;
         this.sudoEnabled = enable; // Persist preference
+
         this.save();
         console.log(`[AuthService] Sudo Mode set to: ${this.sudoMode}`);
 
-        // Auto-logout after 15 mins of inactivity? Disabled for now since persistence is preferred.
-        // User can manually toggle off or close browser.
         if (this.sessionExpiry) clearTimeout(this.sessionExpiry);
+    }
+
+    /**
+     * Executes a command with sudo privileges using passwordless sudo (sudo -n).
+     * Relies on system configuration (sudoers).
+     */
+    public execSudo(command: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const cmdToRun = `sudo -n ${command}`;
+
+            exec(cmdToRun, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+                if (error) {
+                    // Start of error message might contain password prompt
+                    const msg = stderr || error.message;
+                    reject(new Error(`Sudo error: ${msg.trim()} (Ensure this command is allowed NOPASSWD in sudoers)`));
+                    return;
+                }
+                resolve(stdout);
+            });
+        });
     }
 }
 
 export const authService = new AuthService();
+
