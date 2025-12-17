@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import * as vdf from 'vdf';
+import { execSync } from 'child_process';
 
 interface SteamGame {
     appid: string;
@@ -18,198 +19,206 @@ interface MonitorResult {
 }
 
 class SteamService {
+    // Initial known paths to check first (fast path)
     private steamPaths: string[] = [
         path.join(os.homedir(), '.steam/steam'),
         path.join(os.homedir(), '.local/share/Steam'),
-        path.join(os.homedir(), '.steam/debian-installation'), // Common on Debian/Ubuntu
+        path.join(os.homedir(), '.var/app/com.valvesoftware.Steam/.steam/steam'), // Flatpak
+        path.join(os.homedir(), '.steam/debian-installation'),
     ];
 
     private foundSteamPath: string | null = null;
     private knownGames: SteamGame[] = [];
     private currentGame: SteamGame | null = null;
-    private io: any = null; // Will be set by setSocket
+    private io: any = null;
+    private hasWarnedMissing: boolean = false;
 
     constructor() {
-        this.discoverSteamPath();
+        // Initial discovery
+        this.discoverSteamPath().then(() => {
+            this.getGames(); // Populate cache
+        });
 
         // Poll for game status
         setInterval(() => this.checkRunningGame(), 5000);
+
+        // Re-scan libraries occasionally (e.g. every hour) to pick up new mounts
+        setInterval(() => this.getGames(), 60 * 60 * 1000);
     }
 
     public setSocket(io: any) {
         this.io = io;
     }
 
-    private discoverSteamPath() {
+    private async discoverSteamPath() {
+        // 1. Check standard paths
         for (const p of this.steamPaths) {
             if (fs.existsSync(p)) {
                 this.foundSteamPath = p;
                 console.log(`[SteamService] Found Steam at: ${p}`);
-                break;
+                return;
             }
         }
+
+        // 2. If not found, try to locate libraryfolders.vdf dynamically (More valid than searching for "Steam")
+        // This finds libraries even if the main install is hidden or non-standard
         if (!this.foundSteamPath) {
-            console.warn('[SteamService] Steam installation not found in standard locations.');
+            console.log('[SteamService] Steam non-standard. Searching for libraryfolders.vdf...');
+            // We return, but getGames() will trigger the deep search
         }
     }
 
-    private async findAdditionalLibraries(): Promise<string[]> {
-        const libs: string[] = [];
-        // Search common mount points
-        const searchPaths = ['/home', '/mnt', '/run/media'];
+    private async findConfigPaths(): Promise<string[]> {
+        const potentialConfigs: string[] = [];
+        const searchRoots = ['/home', '/mnt', '/run/media'];
 
-        try {
-            const { execSync } = require('child_process');
-            // Find directories named SteamLibrary or steamapps
-            // limiting depth to avoid valid system hang
-            for (const root of searchPaths) {
-                if (!fs.existsSync(root)) continue;
-                try {
-                    // -maxdepth 4 to keep it sane
-                    const cmd = `find "${root}" -maxdepth 4 -type d -name "SteamLibrary" 2>/dev/null`;
-                    const output = execSync(cmd, { timeout: 5000, encoding: 'utf-8' });
-                    const paths = output.split('\n').filter((p: string) => p.trim().length > 0);
-                    libs.push(...paths);
-                } catch (e) {
-                    // find command often returns non-zero if permission denied on some subfolders
-                }
+        // Use `find` to locate libraryfolders.vdf
+        // This is robust because every valid Steam Library MUST have this file or be registered in one.
+        for (const root of searchRoots) {
+            if (!fs.existsSync(root)) continue;
+            try {
+                // Find libraryfolders.vdf
+                // -maxdepth 5 is distinct balance between depth and speed
+                const cmd = `find "${root}" -maxdepth 5 -type f -name "libraryfolders.vdf" 2>/dev/null`;
+                const output = execSync(cmd, { timeout: 10000, encoding: 'utf-8' });
+                const paths = output.split('\n').filter(p => p.trim().length > 0);
+                potentialConfigs.push(...paths);
+            } catch (e) {
+                // ignore permission errors
             }
-        } catch (e) {
-            console.error('[SteamService] Discovery error', e);
         }
-
-        return libs;
+        return potentialConfigs;
     }
 
     public async getGames(): Promise<SteamGame[]> {
-        if (!this.foundSteamPath) {
-            this.discoverSteamPath(); // Retry
+        // Collect all potential VDF files
+        const vdfPaths: string[] = [];
+
+        // 1. From standard path
+        if (this.foundSteamPath) {
+            vdfPaths.push(path.join(this.foundSteamPath, 'steamapps', 'libraryfolders.vdf'));
+            // Also config/config.vdf might be useful but libraryfolders is better for libraries
         }
 
-        const libraries: string[] = this.foundSteamPath ? [this.foundSteamPath] : [];
+        // 2. Deep search if necessary OR if we want to be thorough (user requested thoroughness)
+        // If we found the web (foundSteamPath), we might still want to look for external drives manually
+        // if they aren't mounted/known yet. But libraryfolders.vdf usually lists them.
+        // Let's do deep search if we have NO games, or only 1 library, or just simply always to be safe?
+        // User requested "search ... anywhere on the system".
 
-        // 1. Read libraryfolders.vdf if available
-        if (this.foundSteamPath) {
-            const libraryFoldersPath = path.join(this.foundSteamPath, 'steamapps', 'libraryfolders.vdf');
-            if (fs.existsSync(libraryFoldersPath)) {
-                try {
-                    const content = fs.readFileSync(libraryFoldersPath, 'utf-8');
-                    const parsed = vdf.parse(content) as any;
-                    if (parsed.libraryfolders) {
-                        for (const key in parsed.libraryfolders) {
-                            const lib = parsed.libraryfolders[key];
-                            if (lib && lib.path) libraries.push(lib.path);
+        const deepPaths = await this.findConfigPaths();
+        for (const p of deepPaths) {
+            if (!vdfPaths.includes(p)) vdfPaths.push(p);
+        }
+
+        if (vdfPaths.length === 0 && !this.foundSteamPath && !this.hasWarnedMissing) {
+            console.warn('[SteamService] Steam not found in standard locations and no libraryfolders.vdf discovered.');
+            this.hasWarnedMissing = true;
+            return [];
+        }
+
+        const libraryPaths = new Set<string>();
+
+        // Parse ALL found VDFs to find Library Paths
+        for (const vdfFile of vdfPaths) {
+            if (!fs.existsSync(vdfFile)) continue;
+            try {
+                const content = fs.readFileSync(vdfFile, 'utf-8');
+                const parsed = vdf.parse(content) as any;
+
+                // Format 1: libraryfolders { "0": { "path": "..." } }
+                if (parsed.libraryfolders) {
+                    for (const key in parsed.libraryfolders) {
+                        const entry = parsed.libraryfolders[key];
+                        if (entry && entry.path) {
+                            libraryPaths.add(entry.path);
+                        } else if (typeof entry === 'string') {
+                            // old format?
+                            libraryPaths.add(entry);
                         }
                     }
-                } catch (e) {
-                    console.error('[SteamService] Error parsing libraryfolders.vdf', e);
                 }
+            } catch (e) {
+                console.error(`[SteamService] Failed to parse ${vdfFile}`, e);
             }
         }
 
-        // 2. Add Discovered libraries
-        const discovered = await this.findAdditionalLibraries();
-        for (const disc of discovered) {
-            if (!libraries.includes(disc)) {
-                libraries.push(disc);
+        // Also fallback: Add the parent dir of any found libraryfolders.vdf as a potential library root
+        // (If libraryfolders.vdf is IN steamapps, parent is steamapps, parent-parent is Library Root)
+        for (const vdfFile of vdfPaths) {
+            // /path/to/Library/steamapps/libraryfolders.vdf
+            const steamapps = path.dirname(vdfFile);
+            if (path.basename(steamapps) === 'steamapps') {
+                libraryPaths.add(path.dirname(steamapps));
             }
         }
 
         const games: SteamGame[] = [];
         const seenAppIds = new Set<string>();
 
-        // ... (Parsing logic)
-
-
-        for (const lib of libraries) {
+        for (const lib of Array.from(libraryPaths)) {
             const steamapps = path.join(lib, 'steamapps');
             if (!fs.existsSync(steamapps)) continue;
 
-            try {
-                const files = fs.readdirSync(steamapps);
-                for (const file of files) {
-                    if (file.startsWith('appmanifest_') && file.endsWith('.acf')) {
-                        try {
-                            const manifestContent = fs.readFileSync(path.join(steamapps, file), 'utf-8');
-                            const manifest = vdf.parse(manifestContent) as any;
-
-                            if (manifest && manifest.AppState) {
-                                const app = manifest.AppState;
-                                if (!seenAppIds.has(app.appid)) {
-                                    games.push({
-                                        appid: app.appid,
-                                        name: app.name,
-                                        installDir: path.join(steamapps, 'common', app.installdir),
-                                        sizeOnDisk: parseInt(app.SizeOnDisk || '0'),
-                                        libraryPath: lib,
-                                        // Use standard Steam CDN for library grid images (600x900)
-                                        imageUrl: `https://steamcdn-a.akamaihd.net/steam/apps/${app.appid}/library_600x900.jpg`
-                                    });
-                                    seenAppIds.add(app.appid);
-                                }
+            const files = fs.readdirSync(steamapps);
+            for (const file of files) {
+                if (file.startsWith('appmanifest_') && file.endsWith('.acf')) {
+                    try {
+                        const manifestContent = fs.readFileSync(path.join(steamapps, file), 'utf-8');
+                        const manifest = vdf.parse(manifestContent) as any;
+                        if (manifest && manifest.AppState) {
+                            const app = manifest.AppState;
+                            if (!seenAppIds.has(app.appid)) {
+                                games.push({
+                                    appid: app.appid,
+                                    name: app.name,
+                                    installDir: path.join(steamapps, 'common', app.installdir),
+                                    sizeOnDisk: parseInt(app.SizeOnDisk || '0'),
+                                    libraryPath: lib,
+                                    imageUrl: `https://steamcdn-a.akamaihd.net/steam/apps/${app.appid}/library_600x900.jpg`
+                                });
+                                seenAppIds.add(app.appid);
                             }
-                        } catch (err) {
-                            // Ignore malformed manifests
                         }
-                    }
+                    } catch (e) { }
                 }
-            } catch (e) {
-                console.error(`[SteamService] Error reading library ${lib}`, e);
             }
         }
 
         this.knownGames = games;
+        if (games.length > 0) {
+            this.hasWarnedMissing = false; // Reset warning if we eventually found something
+        }
         return games;
     }
 
     public async checkRunningGame() {
+        // Only run if we actually have games to check against, or every so often retry discovery
         if (this.knownGames.length === 0) {
-            await this.getGames();
+            // Maybe retry discovery?
+            // this.getGames(); // implicit via constructor interval or manual trigger
+            return;
         }
 
         try {
-            // Robust method: Scan /proc for running processes and check their executable paths
-            // This avoids issues with command-line arguments being misleading/missing.
-
-            // 1. Get all numeric entries in /proc (PIDs)
             const pids = fs.readdirSync('/proc').filter(f => /^\d+$/.test(f));
-
             let detected: SteamGame | null = null;
-
-            // Optimization: Create a quick lookup or just iterate. 
-            // Since we have ~300 procs and ~20 games, nested loop is fine (6000 ops is tiny).
 
             for (const pid of pids) {
                 try {
                     const exeLink = `/proc/${pid}/exe`;
-                    // accessing /proc/<pid>/exe requires privileges (we are root/sudo hopefully, or owner)
-                    // If we can't read it (e.g. kernel thread), readlinkSync throws usually or EACCES.
                     if (!fs.existsSync(exeLink)) continue;
-
                     const exePath = fs.readlinkSync(exeLink);
 
-                    // Check if this exe is inside any game's install dir
                     for (const game of this.knownGames) {
                         if (!game.installDir) continue;
-
-                        // Check if exePath starts with installDir
-                        // Need to ensure installDir is treated as a directory prefix (append sep)
-                        // to avoid matching "/path/to/Game" with "/path/to/Game2"
                         const installDirWithSep = game.installDir.endsWith(path.sep) ? game.installDir : game.installDir + path.sep;
-
                         if (exePath.startsWith(installDirWithSep)) {
-                            // Double check it's not a Steam runtime helper if necessary?
-                            // Usually main binary is what we want. 
-                            // We might match "bash" scripts inside the dir too, which is probably fine/good.
                             detected = game;
                             break;
                         }
                     }
-                } catch (e) {
-                    // unexpected error reading link (e.g. process died, permission denied)
-                    continue;
-                }
-
+                } catch (e) { continue; }
                 if (detected) break;
             }
 
@@ -220,15 +229,12 @@ class SteamService {
                     this.io.emit('steam:now-playing', detected);
                 }
             }
-
         } catch (e) {
-            console.error('[SteamService] Error checking running game process:', e);
+            // Silently fail on permission errors usually
         }
     }
 
     public getDownloads() {
-        // Simple check for now: look at steamapps/downloading
-        // This is a placeholder for more complex logic
         return [];
     }
 }
