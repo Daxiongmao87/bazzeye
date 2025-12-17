@@ -113,6 +113,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('layout:save', ({ layouts, extras }: any) => {
+        console.log('[Layout] Saving layouts, extras:', extras);
         layoutService.saveLayout(layouts, extras);
         // Broadcast to other clients?
         socket.broadcast.emit('layout:updated', { layouts, extras });

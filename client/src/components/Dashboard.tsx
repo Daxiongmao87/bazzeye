@@ -80,6 +80,22 @@ const Dashboard: React.FC = () => {
     const [layouts, setLayouts] = useState<{ lg: RGL_Layout, md: RGL_Layout, sm: RGL_Layout }>({ lg: defaultLayout, md: defaultLayout, sm: defaultLayout });
     const [extraTerminals, setExtraTerminals] = useState<string[]>([]);
 
+    // Flag to prevent saving until server data is loaded
+    const [layoutLoaded, setLayoutLoaded] = useState(false);
+
+    // Refs to track current values for callbacks (avoids stale closure)
+    const extraTerminalsRef = useRef<string[]>([]);
+    const layoutsRef = useRef(layouts);
+
+    // Keep refs in sync with state
+    useEffect(() => {
+        extraTerminalsRef.current = extraTerminals;
+    }, [extraTerminals]);
+
+    useEffect(() => {
+        layoutsRef.current = layouts;
+    }, [layouts]);
+
     // Width tracking - Start at 0 to prevent "Wrong Width" jump
     const [width, setWidth] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -118,6 +134,8 @@ const Dashboard: React.FC = () => {
             if (data && data.extras) {
                 setExtraTerminals(data.extras);
             }
+            // Mark as loaded - now safe to save
+            setLayoutLoaded(true);
         });
 
         socket.on('layout:updated', (data: { layouts: any, extras: string[] }) => {
@@ -173,17 +191,19 @@ const Dashboard: React.FC = () => {
 
     const onLayoutChange = (_currentLayout: RGL_Layout, allLayouts: any) => {
         setLayouts(allLayouts);
-        // Save to backend
-        socket?.emit('layout:save', { layouts: allLayouts, extras: extraTerminals });
+        // Don't save until initial data is loaded from server
+        if (!layoutLoaded) return;
+        // Save to backend - use ref to get current extras value
+        socket?.emit('layout:save', { layouts: allLayouts, extras: extraTerminalsRef.current });
     };
 
     const toggleLayoutLock = () => {
         const wasEditing = isDraggable;
         setIsDraggable(!isDraggable);
 
-        // Save layout when EXITING edit mode
+        // Save layout when EXITING edit mode - use refs for current values
         if (wasEditing) {
-            socket?.emit('layout:save', { layouts, extras: extraTerminals });
+            socket?.emit('layout:save', { layouts: layoutsRef.current, extras: extraTerminalsRef.current });
         }
     };
 
