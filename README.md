@@ -55,13 +55,10 @@ Access at `http://localhost:3000` (or your IP).
 ### 4. Install as System Service
 To run automatically on boot:
 
-1.  Edit `bazzeye.service` if your install path is not `/root/bazzeye`.
-2.  Install and start:
-    ```bash
-    sudo cp bazzeye.service /etc/systemd/system/
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now bazzeye
-    ```
+To run automatically on boot, simply answer **"y"** when the setup script asks:
+*"Do you want to install Bazzeye as a system service?"*
+
+The script will automatically generate a valid Systemd service file for your specific user/path and install it.
 
 ## Usage
 

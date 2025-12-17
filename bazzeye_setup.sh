@@ -89,5 +89,57 @@ else
 fi
 
 echo -e "${GREEN}Setup Complete!${NC}"
-echo -e "You can now run the server using: ./start_server.sh"
+echo -e "${GREEN}Setup Complete!${NC}"
+echo -e "You can now run the server manually using: ./start_server.sh"
+
+# Service Installation
+echo ""
+echo "----------------------------------------------------------------"
+read -p "Do you want to install Bazzeye as a system service? (y/N) " -r
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    # Generate Service File
+    SERVICE_FILE="bazzeye.service"
+    SERVICE_USER="$USER"
+    SERVICE_GROUP=$(id -gn)
+    WORKING_DIR="$CURRENT_DIR"
+    EXEC_START="$WORKING_DIR/runtime/node/bin/node $WORKING_DIR/server/dist/index.js"
+
+    echo "Generating $SERVICE_FILE..."
+    cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=Bazzeye Server
+After=network.target
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+Group=$SERVICE_GROUP
+WorkingDirectory=$WORKING_DIR
+ExecStart=$EXEC_START
+Restart=on-failure
+Environment=NODE_ENV=production
+Environment=PORT=3000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    echo "Installing service..."
+    if [ "$EUID" -ne 0 ]; then
+        echo "Root privileges required to install service."
+        sudo cp "$SERVICE_FILE" /etc/systemd/system/
+        sudo systemctl daemon-reload
+        sudo systemctl enable --now bazzeye
+    else
+        cp "$SERVICE_FILE" /etc/systemd/system/
+        systemctl daemon-reload
+        systemctl enable --now bazzeye
+    fi
+    echo -e "${GREEN}Service installed and started!${NC}"
+    echo "Check status with: systemctl status bazzeye"
+else
+    echo "Skipping service installation."
+    echo "A 'bazzeye.service' file has NOT been generated to avoid overwriting existing configs."
+fi
+
 
