@@ -20,7 +20,8 @@ class FileService {
     private rootDir: string;
 
     constructor() {
-        this.rootDir = process.env.HOME || '/root';
+        // Use owner's home, not the service user's (which may not exist)
+        this.rootDir = ownerService.getOwnerHome();
     }
 
     public async listFiles(requestPath: string, useSudo: boolean = false): Promise<{ success: boolean, files?: FileEntry[], currentPath?: string, parentPath?: string, error?: string }> {
