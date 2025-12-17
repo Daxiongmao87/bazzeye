@@ -38,6 +38,9 @@ const Dashboard: React.FC = () => {
         sustainedSeconds: 60
     });
 
+    // Flag to ensure we don't overwrite local storage with defaults on mount
+    const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
+
     // Load Alert Settings
     useEffect(() => {
         const saved = localStorage.getItem('bazzeye_alert_settings');
@@ -48,12 +51,15 @@ const Dashboard: React.FC = () => {
                 console.error('Failed to parse alert settings', e);
             }
         }
+        setIsSettingsLoaded(true);
     }, []);
 
     // Save Alert Settings
     useEffect(() => {
-        localStorage.setItem('bazzeye_alert_settings', JSON.stringify(alertSettings));
-    }, [alertSettings]);
+        if (isSettingsLoaded) {
+            localStorage.setItem('bazzeye_alert_settings', JSON.stringify(alertSettings));
+        }
+    }, [alertSettings, isSettingsLoaded]);
 
     // Auth Input State
     const [passwordInput, setPasswordInput] = useState('');
