@@ -17,8 +17,8 @@ interface FileEntry {
 const FileBrowserWidget: React.FC = () => {
     const socket = useSocket();
 
-    // Owner info from server
-    const [ownerHome, setOwnerHome] = useState<string | null>(null);
+    // Owner info from server (setOwnerHome used in socket handler)
+    const [_ownerHome, setOwnerHome] = useState<string | null>(null);
 
     // History Management
     const [history, setHistory] = useState<string[]>([]);
