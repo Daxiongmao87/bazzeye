@@ -4,10 +4,12 @@ import { useSocket } from '../contexts/SocketContext';
 import { Terminal, Activity } from 'lucide-react';
 
 export const UjustWidget: React.FC = () => {
+    const socket = useSocket();
     const [recipes, setRecipes] = useState<Record<string, string[]>>({});
     const [status, setStatus] = useState<{ recipe: string, status: string, error?: string } | null>(null);
 
     useEffect(() => {
+        if (!socket) return;
         socket.emit('ujust:list');
 
         const handleList = (data: Record<string, string[]>) => {
@@ -27,10 +29,10 @@ export const UjustWidget: React.FC = () => {
             socket.off('ujust:list-data', handleList);
             socket.off('ujust:status', handleStatus);
         };
-    }, []);
+    }, [socket]);
 
     const execute = (recipe: string) => {
-        socket.emit('ujust:execute', { recipe });
+        socket?.emit('ujust:execute', { recipe });
     };
 
     return (
