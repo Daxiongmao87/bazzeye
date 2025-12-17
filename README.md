@@ -68,6 +68,14 @@ Access the dashboard at `http://<your-ip-address>`.
 *   **Security**: Click the **Key** icon to set/change your dashboard password.
 *   **Sudo Mode**: Click the **Shield** icon to unlock administrative features (requires password if set).
 
+## Uninstall
+
+To remove the service and clean up all generated files:
+
+```bash
+./bazzeye_uninstall.sh
+```
+
 ## Troubleshooting
 
 -   **Build Fails?**: Ensure you have `distrobox` installed (standard on Bazzite). Run `./bazzeye_setup.sh` again to retry.
