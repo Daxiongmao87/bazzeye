@@ -160,10 +160,7 @@ io.on('connection', (socket) => {
         socket.emit('system:smart-status-update', data);
     });
 
-    socket.on('system:get-info', async () => {
-        const info = await systemControlService.getSystemInfo();
-        socket.emit('system:info', info);
-    });
+    // system:get-info was removed as it called a non-existent method and is unused by frontend
 
     socket.on('system:get-bios', async () => {
         const bios = await systemControlService.getBiosInfo();
