@@ -157,6 +157,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     CMD_SHUTDOWN=$(command -v shutdown || echo "/usr/sbin/shutdown")
     CMD_SMARTCTL=$(command -v smartctl || echo "/usr/sbin/smartctl")
     CMD_UJUST=$(command -v ujust || echo "/usr/bin/ujust")
+    CMD_RPMOSTREE=$(command -v rpm-ostree || echo "/usr/bin/rpm-ostree")
     CMD_SYSTEMCTL=$(command -v systemctl || echo "/usr/bin/systemctl") # Optional if you want app to control services
 
     SUDOERS_FILE="/etc/sudoers.d/bazzeye"
@@ -170,7 +171,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "Creating sudoers rule for user '$USER_NAME'..."
         
         # Rule: user ALL=(ALL) NOPASSWD: path1, path2...
-        RULE="$USER_NAME ALL=(ALL) NOPASSWD: $CMD_REBOOT, $CMD_SHUTDOWN, $CMD_SMARTCTL, $CMD_UJUST"
+        RULE="$USER_NAME ALL=(ALL) NOPASSWD: $CMD_REBOOT, $CMD_SHUTDOWN, $CMD_SMARTCTL, $CMD_UJUST, $CMD_RPMOSTREE"
         
         # We use a temp file
         echo "$RULE" | sudo tee "$SUDOERS_FILE" > /dev/null
@@ -178,7 +179,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "Sudoers configuration applied!"
     else
         echo "Creating sudoers rule for user '$USER_NAME'..."
-        RULE="$USER_NAME ALL=(ALL) NOPASSWD: $CMD_REBOOT, $CMD_SHUTDOWN, $CMD_SMARTCTL, $CMD_UJUST"
+        RULE="$USER_NAME ALL=(ALL) NOPASSWD: $CMD_REBOOT, $CMD_SHUTDOWN, $CMD_SMARTCTL, $CMD_UJUST, $CMD_RPMOSTREE"
         echo "$RULE" > "$SUDOERS_FILE"
         chmod 0440 "$SUDOERS_FILE"
         echo "Sudoers configuration applied!"

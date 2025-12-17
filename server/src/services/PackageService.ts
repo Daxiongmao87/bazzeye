@@ -113,13 +113,13 @@ class PackageService {
     public install(pkg: string) {
         const safePkg = pkg.replace(/[^a-zA-Z0-9\-\_\.]/g, '');
         console.log('[PackageService] Installing:', safePkg);
-        return execAsync(`rpm-ostree install ${safePkg} -y`);
+        return execAsync(`sudo rpm-ostree install ${safePkg} -y`);
     }
 
     public uninstall(pkg: string) {
         const safePkg = pkg.replace(/[^a-zA-Z0-9\-\_\.]/g, '');
         console.log('[PackageService] Uninstalling:', safePkg);
-        return execAsync(`rpm-ostree uninstall ${safePkg} -y`);
+        return execAsync(`sudo rpm-ostree uninstall ${safePkg} -y`);
     }
 
     // Cleanup method for graceful shutdown
