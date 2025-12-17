@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
-import { Shield, ShieldAlert, Plus, X, Settings, Lock, Unlock, Key, Bell } from 'lucide-react';
+import { Shield, ShieldAlert, Plus, X, Settings, Lock, Bell } from 'lucide-react';
 
 // Using named exports which are definitely available in index.mjs
 import { Responsive } from 'react-grid-layout';

@@ -43,18 +43,18 @@ export const PackageWidget: React.FC = () => {
     const search = () => {
         if (!query) return;
         setSearchResults([]); // clear prev
-        socket.emit('package:search', query);
+        socket?.emit('package:search', query);
     };
 
     const install = (pkg: string) => {
         if (confirm(`Install ${pkg}? This may take a while.`)) {
-            socket.emit('package:install', pkg);
+            socket?.emit('package:install', pkg);
         }
     };
 
     const uninstall = (pkg: string) => {
         if (confirm(`Uninstall ${pkg}? This requires reboot to finish.`)) {
-            socket.emit('package:uninstall', pkg);
+            socket?.emit('package:uninstall', pkg);
         }
     };
 
