@@ -94,7 +94,7 @@ export const CleanerWidget: React.FC = () => {
                             <span className="font-bold mt-1">{status === 'success' ? 'Clean Complete' : 'Clean Failed'}</span>
                         </div>
                         <div className="flex-1 bg-black/30 rounded p-2 text-xs font-mono text-gray-400 overflow-auto whitespace-pre-wrap custom-scrollbar">
-                            {output}
+                            {typeof output === 'string' ? output : JSON.stringify(output)}
                         </div>
                         <button
                             onClick={() => setStatus('idle')}

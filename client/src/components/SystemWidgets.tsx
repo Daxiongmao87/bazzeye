@@ -194,15 +194,15 @@ const BiosSection: React.FC = () => {
             </div>
             <div className="flex justify-between border-b border-gray-700/50 pb-1 mb-1">
                 <span className="text-gray-400">Product</span>
-                <span className="font-mono text-right text-xs truncate max-w-[150px]" title={bios.product}>{bios.product}</span>
+                <span className="font-mono text-right text-xs truncate max-w-[150px]" title={String(bios.product)}>{String(bios.product)}</span>
             </div>
             <div className="flex justify-between border-b border-gray-700/50 pb-1 mb-1">
                 <span className="text-gray-400">Vendor</span>
-                <span className="font-mono text-right text-xs truncate max-w-[150px]" title={bios.vendor}>{bios.vendor}</span>
+                <span className="font-mono text-right text-xs truncate max-w-[150px]" title={String(bios.vendor)}>{String(bios.vendor)}</span>
             </div>
             <div className="flex justify-between">
                 <span className="text-gray-400">BIOS</span>
-                <span className="font-mono text-right text-xs">{bios.version}</span>
+                <span className="font-mono text-right text-xs">{String(bios.version)}</span>
             </div>
         </div>
     );
