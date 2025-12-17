@@ -9,7 +9,8 @@ import type { Layout as RGL_Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
-import { CpuWidget, StorageWidget, SystemInfoWidget, SystemDataProvider, AlertSettings } from './SystemWidgets';
+import { CpuWidget, StorageWidget, SystemInfoWidget, SystemDataProvider } from './SystemWidgets';
+import type { AlertSettings } from './SystemWidgets';
 import SteamWidget from './SteamWidget';
 import TerminalWidget from './TerminalWidget';
 import SystemControlWidget from './SystemControlWidget';
