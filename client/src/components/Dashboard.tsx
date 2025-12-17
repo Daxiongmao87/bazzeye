@@ -567,6 +567,24 @@ const Dashboard: React.FC = () => {
                                 <button onClick={handleSetPassword} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold">Update Password</button>
                             </div>
                         </div>
+
+                        <div className="mb-6">
+                            <h3 className="text-sm uppercase text-gray-500 font-bold mb-3 border-b border-gray-800 pb-1">Notifications</h3>
+                            <div className="flex items-center justify-between">
+                                <div className="text-sm text-gray-400">
+                                    Receive push notifications for system updates and alerts.
+                                </div>
+                                <button
+                                    onClick={subscribeToPush}
+                                    disabled={isSubscribed || notificationStatus === 'Permission denied'}
+                                    className={`px-3 py-1 rounded text-sm font-bold flex items-center gap-2 ${isSubscribed ? 'bg-green-900/20 text-green-500 cursor-default' : 'bg-gray-700 hover:bg-gray-600 text-white'}`}
+                                >
+                                    <Bell size={16} />
+                                    {isSubscribed ? 'Enabled' : 'Enable'}
+                                </button>
+                            </div>
+                            {notificationStatus && <p className="text-xs text-gray-500 mt-2">{notificationStatus}</p>}
+                        </div>
                     </div>
                 </div>
             )}
