@@ -18,7 +18,7 @@ import FileBrowserWidget from './FileBrowserWidget';
 import SmartWidget from './SmartWidget';
 import { UjustWidget } from './UjustWidget';
 import { PackageWidget } from './PackageWidget';
-// import { CleanerWidget } from './CleanerWidget'; // [NEW]
+import { CleanerWidget } from './CleanerWidget'; // [NEW]
 import { BazzeyeLogo } from './BazzeyeLogo';
 
 const Dashboard: React.FC = () => {
@@ -302,9 +302,9 @@ const Dashboard: React.FC = () => {
                             </div>
 
                             {/* [NEW] Cleaner Widget */}
-                            {/* <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                            <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
                                 <CleanerWidget />
-                            </div> */}
+                            </div>
 
                             <div key="packages" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
                                 <PackageWidget />
