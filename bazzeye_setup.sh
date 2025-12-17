@@ -90,11 +90,16 @@ if [[ ! $REPLY =~ ^[Nn]$ ]]; then
     echo "Ensuring build dependencies (build tools)..."
     # Wrap in bash -c to avoid OCI/ioctl errors
     # Note: We do NOT install nodejs/npm here. We use the bundled one.
-    if ! distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "sudo dnf install -y git python3 make gcc-c++"; then
+    if ! distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "sudo dnf install -y git python3 make gcc-c++ && sudo dnf remove -y nodejs npm 2>/dev/null || true"; then
         echo -e "${RED}Error: Failed to install dependencies in container.${NC}"
         read -p "Continue with service setup anyway? (y/N) " -r
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
     else
+        # Cleaup previous artifacts to force rebuild
+        echo "Cleaning previous build artifacts..."
+        rm -rf "$CURRENT_DIR/server/node_modules" "$CURRENT_DIR/server/dist"
+        rm -rf "$CURRENT_DIR/client/node_modules" "$CURRENT_DIR/client/dist"
+
         # Build Project
         echo -e "${GREEN}Running Build inside container...${NC}"
         echo "Project Path: $CURRENT_DIR"
