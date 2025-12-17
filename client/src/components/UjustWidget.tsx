@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { socket } from '../socket';
+import { useSocket } from '../contexts/SocketContext';
 import { Terminal, Activity } from 'lucide-react';
 
 export const UjustWidget: React.FC = () => {

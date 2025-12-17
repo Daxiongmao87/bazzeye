@@ -1,6 +1,6 @@
-
+```
 import React, { useEffect, useState } from 'react';
-import { socket } from '../socket';
+import { useSocket } from '../contexts/SocketContext';
 import { Package, Search, Trash2, Download, CheckCircle, AlertTriangle } from 'lucide-react';
 
 interface PackageInfo {
@@ -46,13 +46,13 @@ export const PackageWidget: React.FC = () => {
     };
 
     const install = (pkg: string) => {
-        if (confirm(`Install ${pkg}? This may take a while.`)) {
+        if (confirm(`Install ${ pkg }? This may take a while.`)) {
             socket.emit('package:install', pkg);
         }
     };
 
     const uninstall = (pkg: string) => {
-        if (confirm(`Uninstall ${pkg}? This requires reboot to finish.`)) {
+        if (confirm(`Uninstall ${ pkg }? This requires reboot to finish.`)) {
             socket.emit('package:uninstall', pkg);
         }
     };
@@ -67,13 +67,13 @@ export const PackageWidget: React.FC = () => {
                 <div className="flex bg-zinc-800 rounded p-1">
                     <button
                         onClick={() => setActiveTab('search')}
-                        className={`text-xs px-3 py-1 rounded transition-colors ${activeTab === 'search' ? 'bg-zinc-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                        className={`text - xs px - 3 py - 1 rounded transition - colors ${ activeTab === 'search' ? 'bg-zinc-600 text-white' : 'text-zinc-400 hover:text-zinc-200' } `}
                     >
                         Search
                     </button>
                     <button
                         onClick={() => setActiveTab('installed')}
-                        className={`text-xs px-3 py-1 rounded transition-colors ${activeTab === 'installed' ? 'bg-zinc-600 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+                        className={`text - xs px - 3 py - 1 rounded transition - colors ${ activeTab === 'installed' ? 'bg-zinc-600 text-white' : 'text-zinc-400 hover:text-zinc-200' } `}
                     >
                         Installed ({layeredPkgs.length})
                     </button>
