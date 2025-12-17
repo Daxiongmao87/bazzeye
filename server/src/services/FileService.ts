@@ -27,9 +27,14 @@ class FileService {
     public async listFiles(requestPath: string, useSudo: boolean = false): Promise<{ success: boolean, files?: FileEntry[], currentPath?: string, parentPath?: string, error?: string }> {
         const targetPath = requestPath ? path.resolve(requestPath) : this.rootDir;
 
+        console.log(`[FileService] listFiles called: path="${requestPath}", useSudo=${useSudo}, targetPath="${targetPath}"`);
+
         if (useSudo) {
+            console.log(`[FileService] Using sudo path for: ${targetPath}`);
             return this.listWithSudo(targetPath);
         }
+
+        console.log(`[FileService] Using non-sudo path for: ${targetPath}`);
 
         try {
             // Simple check to ensure we can read it
