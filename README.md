@@ -58,6 +58,7 @@ To run automatically on boot, simply answer **"y"** when the setup script asks:
 *"Do you want to install Bazzeye as a system service?"*
 
 The script will automatically generate a valid Systemd service file for your specific user/path and install it.
+**Note:** The service runs as your current user, not root. Privileged actions (like reboot) are handled via secure password-less sudo rules configured during setup.
 
 ## Usage
 
