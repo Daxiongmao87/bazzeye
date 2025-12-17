@@ -36,13 +36,15 @@ class MonitorService {
 
     public async getStats() {
         try {
-            const [cpu, mem, fsSize, networkStats, osInfo, networkInterfaces] = await Promise.all([
+            const [cpu, mem, fsSize, networkStats, osInfo, networkInterfaces, cpuTemp, disksIO] = await Promise.all([
                 si.currentLoad(),
                 si.mem(),
                 si.fsSize(),
                 si.networkStats(),
                 si.osInfo(),
-                si.networkInterfaces()
+                si.networkInterfaces(),
+                si.cpuTemperature(),
+                si.disksIO()
             ]);
 
             // Helper to find IP
@@ -50,6 +52,16 @@ class MonitorService {
             if (Array.isArray(networkInterfaces)) {
                 const iface = networkInterfaces.find(i => !i.internal && i.ip4 && i.ip4 !== '127.0.0.1');
                 if (iface) localIp = iface.ip4;
+            }
+
+            // Aggregate network stats (sum all non-loopback interfaces)
+            let totalRxSec = 0;
+            let totalTxSec = 0;
+            for (const ns of networkStats) {
+                if (ns.iface !== 'lo') {
+                    totalRxSec += ns.rx_sec || 0;
+                    totalTxSec += ns.tx_sec || 0;
+                }
             }
 
             const stats = {
@@ -63,11 +75,19 @@ class MonitorService {
                 ip: { local: localIp },
                 cpu: {
                     load: cpu.currentLoad,
-                    temp: 0 // sysinfo temp often requires root or specific sensors
+                    temp: cpuTemp.main ?? 0
                 },
                 mem: {
                     total: mem.total,
                     used: mem.active
+                },
+                io: {
+                    read_sec: disksIO.rIO_sec ?? 0,
+                    write_sec: disksIO.wIO_sec ?? 0
+                },
+                networkTotal: {
+                    rx_sec: totalRxSec,
+                    tx_sec: totalTxSec
                 },
                 storage: fsSize.map(fs => ({
                     fs: fs.fs,

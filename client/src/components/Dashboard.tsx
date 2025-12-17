@@ -10,7 +10,7 @@ import type { Layout as RGL_Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
-import { CpuWidget, StorageWidget, NetworkWidget, SystemInfoWidget, SystemDataProvider } from './SystemWidgets';
+import { CpuWidget, StorageWidget, SystemInfoWidget, SystemDataProvider } from './SystemWidgets';
 import SteamWidget from './SteamWidget';
 import TerminalWidget from './TerminalWidget';
 import SystemControlWidget from './SystemControlWidget';
@@ -40,12 +40,11 @@ const Dashboard: React.FC = () => {
     // Layout configuration
     const defaultLayout: RGL_Layout = [
         { i: 'info', x: 0, y: 0, w: 3, h: 10, minW: 1, minH: 5 },
-        { i: 'cpu', x: 3, y: 0, w: 3, h: 8, minW: 2, minH: 5 },
-        { i: 'storage', x: 6, y: 0, w: 3, h: 4, minW: 1, minH: 3 },
-        { i: 'smart', x: 6, y: 4, w: 3, h: 4, minW: 1, minH: 3 },
-        { i: 'network', x: 9, y: 0, w: 3, h: 4, minW: 1, minH: 3 },
-        { i: 'controls', x: 9, y: 4, w: 3, h: 10, minW: 1, minH: 7 },
-        { i: 'steam', x: 6, y: 8, w: 6, h: 8, minW: 3, minH: 5 },
+        { i: 'cpu', x: 3, y: 0, w: 6, h: 8, minW: 3, minH: 6 },
+        { i: 'storage', x: 9, y: 0, w: 3, h: 4, minW: 1, minH: 3 },
+        { i: 'smart', x: 9, y: 4, w: 3, h: 4, minW: 1, minH: 3 },
+        { i: 'controls', x: 9, y: 8, w: 3, h: 10, minW: 1, minH: 7 },
+        { i: 'steam', x: 3, y: 8, w: 6, h: 8, minW: 3, minH: 5 },
         { i: 'files', x: 0, y: 10, w: 6, h: 8, minW: 3, minH: 5 },
         { i: 'cleaner', x: 0, y: 18, w: 4, h: 8, minW: 2, minH: 5 },
         { i: 'packages', x: 4, y: 18, w: 4, h: 8, minW: 2, minH: 5 },
@@ -315,9 +314,6 @@ const Dashboard: React.FC = () => {
                             </div>
                             <div key="smart" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
                                 <SmartWidget />
-                            </div>
-                            <div key="network" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <NetworkWidget />
                             </div>
 
                             <div key="steam" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">

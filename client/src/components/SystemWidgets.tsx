@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useContext, createContext } from 'react';
 import { useSocket } from '../contexts/SocketContext';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Activity, HardDrive, Network, Cpu, MemoryStick, CircuitBoard, Monitor } from 'lucide-react';
+import { Activity, HardDrive, Cpu, MemoryStick, CircuitBoard, Monitor } from 'lucide-react';
 
 interface SystemStats {
     timestamp: string;
@@ -9,6 +9,8 @@ interface SystemStats {
     ip?: { local: string };
     cpu: { load: number, temp: number };
     mem: { total: number, used: number };
+    io?: { read_sec: number, write_sec: number };
+    networkTotal?: { rx_sec: number, tx_sec: number };
     storage: { fs: string, size: number, used: number, use: number, mount?: string }[];
     network: { iface: string, rx_sec: number, tx_sec: number }[];
 }
@@ -51,7 +53,10 @@ export const SystemDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             const formatted = hist.map(data => ({
                 time: new Date(data.timestamp).toLocaleTimeString(),
                 cpu: data.cpu.load,
-                mem: (data.mem.used / data.mem.total) * 100
+                mem: (data.mem.used / data.mem.total) * 100,
+                temp: data.cpu.temp ?? 0,
+                netMbps: ((data.networkTotal?.rx_sec ?? 0) + (data.networkTotal?.tx_sec ?? 0)) / 125000, // Convert to Mbps
+                ioMBps: ((data.io?.read_sec ?? 0) + (data.io?.write_sec ?? 0)) / (1024 * 1024) // Convert to MB/s
             }));
             setHistory(formatted);
             // Also set latest stats from history if available
@@ -66,7 +71,10 @@ export const SystemDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 const newHistory = [...prev, {
                     time: new Date(data.timestamp).toLocaleTimeString(),
                     cpu: data.cpu.load,
-                    mem: (data.mem.used / data.mem.total) * 100
+                    mem: (data.mem.used / data.mem.total) * 100,
+                    temp: data.cpu.temp ?? 0,
+                    netMbps: ((data.networkTotal?.rx_sec ?? 0) + (data.networkTotal?.tx_sec ?? 0)) / 125000, // Convert to Mbps
+                    ioMBps: ((data.io?.read_sec ?? 0) + (data.io?.write_sec ?? 0)) / (1024 * 1024) // Convert to MB/s
                 }];
                 return newHistory.slice(-60); // Keep last 60 points matches backend buffer
             });
@@ -212,31 +220,61 @@ const BiosSection: React.FC = () => {
 export const CpuWidget: React.FC = () => {
     const { stats, history } = useSystemData();
     if (!stats) return <div className="text-gray-400 p-4">Loading stats...</div>;
+
+    // Get latest values for display
+    const latestNet = history.length > 0 ? history[history.length - 1].netMbps : 0;
+    const latestIO = history.length > 0 ? history[history.length - 1].ioMBps : 0;
+
     return (
         <div className="h-full flex flex-col p-4">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex justify-between items-center mb-2">
                 <h2 className="text-xl font-semibold flex items-center gap-2">
                     <Activity size={20} className="text-blue-400" /> Performance
                 </h2>
-                <div className="text-sm text-gray-400 space-x-4">
+                <div className="text-xs text-gray-400 flex gap-3">
                     <span>CPU: {stats.cpu.load.toFixed(1)}%</span>
                     <span>MEM: {((stats.mem.used / stats.mem.total) * 100).toFixed(1)}%</span>
+                    {stats.cpu.temp > 0 && <span>Temp: {stats.cpu.temp.toFixed(0)}°C</span>}
                 </div>
+            </div>
+            {/* Legend */}
+            <div className="flex flex-wrap gap-3 mb-2 text-xs">
+                <span className="flex items-center gap-1"><span className="w-3 h-1 rounded" style={{ backgroundColor: '#3b82f6' }}></span> CPU %</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-1 rounded" style={{ backgroundColor: '#10b981' }}></span> MEM %</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-1 rounded" style={{ backgroundColor: '#f59e0b' }}></span> Temp °C</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-1 rounded" style={{ backgroundColor: '#8b5cf6' }}></span> Net Mbps</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-1 rounded" style={{ backgroundColor: '#ec4899' }}></span> Disk MB/s</span>
             </div>
             <div className="flex-1 w-full min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={history}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                         <XAxis dataKey="time" hide />
-                        <YAxis domain={[0, 100]} />
+                        <YAxis domain={[0, 'auto']} />
                         <Tooltip
                             contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151' }}
                             itemStyle={{ color: '#e5e7eb' }}
+                            formatter={(value, name) => {
+                                const v = typeof value === 'number' ? value : 0;
+                                if (name === 'cpu' || name === 'mem') return [`${v.toFixed(1)}%`, name.toUpperCase()];
+                                if (name === 'temp') return [`${v.toFixed(0)}°C`, 'Temp'];
+                                if (name === 'netMbps') return [`${v.toFixed(2)} Mbps`, 'Network'];
+                                if (name === 'ioMBps') return [`${v.toFixed(2)} MB/s`, 'Disk I/O'];
+                                return [v, name];
+                            }}
                         />
-                        <Line type="monotone" dataKey="cpu" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                        <Line type="monotone" dataKey="mem" stroke="#10b981" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="cpu" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} />
+                        <Line type="monotone" dataKey="mem" stroke="#10b981" strokeWidth={2} dot={false} isAnimationActive={false} />
+                        <Line type="monotone" dataKey="temp" stroke="#f59e0b" strokeWidth={2} dot={false} isAnimationActive={false} />
+                        <Line type="monotone" dataKey="netMbps" stroke="#8b5cf6" strokeWidth={2} dot={false} isAnimationActive={false} />
+                        <Line type="monotone" dataKey="ioMBps" stroke="#ec4899" strokeWidth={2} dot={false} isAnimationActive={false} />
                     </LineChart>
                 </ResponsiveContainer>
+            </div>
+            {/* Current values footer */}
+            <div className="flex justify-between text-xs text-gray-500 mt-1 border-t border-gray-800 pt-1">
+                <span>Net: {latestNet.toFixed(2)} Mbps</span>
+                <span>Disk: {latestIO.toFixed(2)} MB/s</span>
             </div>
         </div>
     );
@@ -262,29 +300,6 @@ export const StorageWidget: React.FC = () => {
                                 className="bg-purple-500 h-2 rounded-full"
                                 style={{ width: `${disk.use}%` }}
                             ></div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-export const NetworkWidget: React.FC = () => {
-    const { stats } = useSystemData();
-    if (!stats) return <div className="text-gray-400 p-4">Loading network...</div>;
-    return (
-        <div className="h-full overflow-auto custom-scrollbar p-4">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <Network size={20} className="text-green-400" /> Network
-            </h2>
-            <div className="space-y-4">
-                {stats.network.slice(0, 3).map((net, i) => (
-                    <div key={i} className="text-sm border-b border-gray-700 last:border-0 pb-2">
-                        <div className="font-semibold text-gray-300 mb-1">{net.iface}</div>
-                        <div className="flex justify-between text-gray-400">
-                            <span>↓ {(net.rx_sec / 1024).toFixed(1)} KB/s</span>
-                            <span>↑ {(net.tx_sec / 1024).toFixed(1)} KB/s</span>
                         </div>
                     </div>
                 ))}
