@@ -28,6 +28,12 @@ class MonitorService {
                 transport
             ]
         });
+
+        // Prime systeminformation's internal state for per-second calculations
+        // These functions need a previous call to calculate delta rates
+        si.disksIO().catch(() => { });
+        si.networkStats().catch(() => { });
+        si.fsStats().catch(() => { });
     }
 
     public getHistory() {
