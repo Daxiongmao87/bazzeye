@@ -70,21 +70,40 @@ class SteamService {
 
     private async findConfigPaths(): Promise<string[]> {
         const potentialConfigs: string[] = [];
-        const searchRoots = ['/home', '/mnt', '/run/media'];
+        // Global search as requested, but safely excluding virtual filesystems
+        const searchRoot = '/';
+        const prunes = ['/proc', '/sys', '/dev', '/run', '/tmp', '/var/lib/docker', '/var/lib/containers'];
 
-        // Use `find` to locate libraryfolders.vdf
-        // This is robust because every valid Steam Library MUST have this file or be registered in one.
-        for (const root of searchRoots) {
-            if (!fs.existsSync(root)) continue;
-            try {
-                // Find libraryfolders.vdf
-                // -maxdepth 5 is distinct balance between depth and speed
-                const cmd = `find "${root}" -maxdepth 5 -type f -name "libraryfolders.vdf" 2>/dev/null`;
-                const output = execSync(cmd, { timeout: 10000, encoding: 'utf-8' });
-                const paths = output.split('\n').filter(p => p.trim().length > 0);
+        try {
+            // Construct find command:
+            // find / -path /proc -prune -o -path /sys -prune ... -o -type f -name "libraryfolders.vdf" -print
+            let cmd = `find "${searchRoot}"`;
+
+            // Add prunes
+            for (const p of prunes) {
+                cmd += ` -path "${p}" -prune -o`;
+            }
+
+            // Add search criteria
+            // Looking for EITHER libraryfolders.vdf OR config.vdf (sometimes useful)
+            // But let's stick to libraryfolders.vdf for now as primary target + directories named "SteamLibrary"
+            // Actually, finding "SteamLibrary" directories is a good fallback if the VDF is missing.
+
+            // " -type f -name 'libraryfolders.vdf' -print "
+            cmd += ` -type f -name "libraryfolders.vdf" -print`;
+
+            console.log(`[SteamService] Executing global search: ${cmd}`);
+            const output = execSync(cmd, { timeout: 30000, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
+            // stdio ignore stderr to suppress "Permission denied" spam
+
+            const paths = output.split('\n').filter(p => p.trim().length > 0);
+            potentialConfigs.push(...paths);
+        } catch (e) {
+            // find often returns non-zero if it hits ANY permission denied, which is expected on /root
+            // We just want the stdout that was captured
+            if ((e as any).stdout) {
+                const paths = (e as any).stdout.toString().split('\n').filter((p: string) => p.trim().length > 0);
                 potentialConfigs.push(...paths);
-            } catch (e) {
-                // ignore permission errors
             }
         }
         return potentialConfigs;
