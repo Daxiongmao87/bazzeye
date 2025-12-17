@@ -18,7 +18,7 @@ import FileBrowserWidget from './FileBrowserWidget';
 import SmartWidget from './SmartWidget';
 import { UjustWidget } from './UjustWidget';
 import { PackageWidget } from './PackageWidget';
-import { CleanerWidget } from './CleanerWidget'; // [NEW]
+// import { CleanerWidget } from './CleanerWidget'; // [NEW]
 import { BazzeyeLogo } from './BazzeyeLogo';
 
 const Dashboard: React.FC = () => {
