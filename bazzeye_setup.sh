@@ -168,10 +168,12 @@ EOF
         echo "Root privileges required to install service."
         sudo cp "$SERVICE_FILE" /etc/systemd/system/
         sudo systemctl daemon-reload
+        sudo systemctl reset-failed bazzeye || true
         sudo systemctl enable --now bazzeye
     else
         cp "$SERVICE_FILE" /etc/systemd/system/
         systemctl daemon-reload
+        systemctl reset-failed bazzeye || true
         systemctl enable --now bazzeye
     fi
     echo -e "${GREEN}Service installed and started!${NC}"
