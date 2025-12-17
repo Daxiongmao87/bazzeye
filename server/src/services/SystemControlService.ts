@@ -30,7 +30,7 @@ class SystemControlService {
             // Bazzite/Silverblue often use `rpm-ostree status` to see if an update is already staged (pending reboot).
             // But to check for *new* available updates from remote, we fetch.
             // Let's try a safe check: `rpm-ostree upgrade --check --preview`
-            const { stdout } = await execAsync('rpm-ostree upgrade --check --preview');
+            const { stdout } = await execAsync('sudo rpm-ostree upgrade --check --preview');
             // If output contains "AvailableUpdate", then yes.
             // Exact string depends on version, but typically it lists packages if updates exist.
             // Or "No upgrade available".
@@ -71,7 +71,7 @@ class SystemControlService {
             // We return a stream or promise?
             // Simple version: Fire and allow client to see stats.
             // But usually this takes a while.
-            return execAsync('ujust update');
+            return execAsync('sudo ujust update');
         } catch (e: any) {
             throw e;
         }
@@ -145,7 +145,7 @@ class SystemControlService {
 
     public async getUjustRecipes(): Promise<Record<string, string[]>> {
         try {
-            const { stdout } = await execAsync('ujust --list');
+            const { stdout } = await execAsync('sudo ujust --list');
             // Output format:
             // Available recipes:
             //     recipe-name
