@@ -78,6 +78,25 @@ class FileService {
             return { success: false, error: error.message };
         }
     }
+
+    public async createFolder(folderPath: string): Promise<{ success: boolean, error?: string }> {
+        try {
+            await fs.promises.mkdir(folderPath, { recursive: true });
+            return { success: true };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    }
+
+    public async createFile(filePath: string): Promise<{ success: boolean, error?: string }> {
+        try {
+            // Create empty file
+            await fs.promises.writeFile(filePath, '');
+            return { success: true };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    }
 }
 
 export const fileService = new FileService();

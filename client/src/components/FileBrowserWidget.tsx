@@ -4,7 +4,7 @@ import { useSocket } from '../contexts/SocketContext';
 import {
     Folder, File, ArrowLeft, ArrowRight, ArrowUp,
     Loader, Upload, Download, Trash2, Home, HardDrive,
-    Monitor, FileText, FolderOpen
+    FileText, FolderOpen, Plus, X // [NEW] Added Plus, X. Removed Monitor.
 } from 'lucide-react';
 
 interface FileEntry {
@@ -29,6 +29,60 @@ const FileBrowserWidget: React.FC = () => {
     const [addressBar, setAddressBar] = useState('');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Places Management
+    const defaultPlaces = [
+        { name: 'Root', path: '/', icon: <HardDrive size={16} /> },
+        { name: 'Home', path: '/root', icon: <Home size={16} /> },
+        { name: 'Downloads', path: '/root/Downloads', icon: <Download size={16} /> },
+        { name: 'Documents', path: '/root/Documents', icon: <FileText size={16} /> },
+    ];
+
+    const [places, setPlaces] = useState<any[]>(() => {
+        const saved = localStorage.getItem('file-browser-places');
+        if (saved) {
+            try { return JSON.parse(saved); } catch (e) { }
+        }
+        return defaultPlaces;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('file-browser-places', JSON.stringify(places));
+    }, [places]);
+
+    const addPlace = () => {
+        if (!currentPath) return;
+        const name = currentPath.split('/').pop() || 'Root';
+
+        // check if exists
+        if (places.find(p => p.path === currentPath)) return;
+
+        setPlaces(prev => [...prev, { name, path: currentPath, icon: <Folder size={16} /> }]);
+    };
+
+    const removePlace = (e: React.MouseEvent, path: string) => {
+        e.stopPropagation();
+        // Prevent removing defaults? Maybe not, allow full customization
+        setPlaces(prev => prev.filter(p => p.path !== path));
+    };
+
+    // Creation State
+    const [creationType, setCreationType] = useState<'file' | 'folder' | null>(null);
+    const [newItemName, setNewItemName] = useState('');
+
+    const handleCreate = () => {
+        if (!creationType || !newItemName) return;
+        const fullPath = (currentPath === '/' ? '' : currentPath) + '/' + newItemName;
+
+        if (creationType === 'folder') {
+            socket?.emit('files:create-folder', { path: fullPath });
+        } else {
+            socket?.emit('files:create-file', { path: fullPath });
+        }
+        setCreationType(null);
+        setNewItemName('');
+    };
+
 
     // Initial Load
     useEffect(() => {
@@ -144,34 +198,50 @@ const FileBrowserWidget: React.FC = () => {
     };
 
     // Sidebar Items
-    const places = [
-        { name: 'Root', path: '/', icon: <HardDrive size={16} /> },
-        { name: 'Home', path: '/root', icon: <Home size={16} /> },
-        { name: 'Downloads', path: '/root/Downloads', icon: <Download size={16} /> },
-        { name: 'Documents', path: '/root/Documents', icon: <FileText size={16} /> },
-        { name: 'Projects', path: '/home/patrick/projects', icon: <Monitor size={16} /> },
-    ];
-
     return (
-        <div className="h-full flex flex-col bg-gray-900 rounded-lg overflow-hidden border border-gray-800">
-            {/* Header / Toolbar */}
-            <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
+        <div className="h-full flex flex-col bg-gray-900 rounded-lg overflow-hidden border border-gray-800 relative">
+            {/* Title Bar - [NEW] */}
+            <div className="bg-gray-900 px-3 py-2 flex justify-between items-center border-b border-gray-800">
+                <h2 className="text-zinc-100 font-semibold flex items-center gap-2 text-sm uppercase tracking-wider">
+                    <FolderOpen size={16} className="text-yellow-500" />
+                    Files
+                </h2>
+                <div className="flex gap-1">
+                    <button
+                        onClick={() => setCreationType('folder')}
+                        className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+                        title="New Folder"
+                    >
+                        <Plus size={16} />
+                    </button>
+                    <button
+                        onClick={() => setCreationType('file')}
+                        className="p-1 hover:bg-gray-700 rounded text-gray-400 hover:text-white"
+                        title="New File"
+                    >
+                        <FileText size={16} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Toolbar */}
+            <div className="bg-gray-800/80 p-2 flex items-center gap-2 border-b border-gray-700 backdrop-blur-sm">
                 <div className="flex items-center gap-1">
-                    <button onClick={handleBack} disabled={historyIndex <= 0} className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent">
+                    <button onClick={handleBack} disabled={historyIndex <= 0} className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-gray-300">
                         <ArrowLeft size={16} />
                     </button>
-                    <button onClick={handleForward} disabled={historyIndex >= history.length - 1} className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent">
+                    <button onClick={handleForward} disabled={historyIndex >= history.length - 1} className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-gray-300">
                         <ArrowRight size={16} />
                     </button>
-                    <button onClick={handleUp} disabled={!currentPath || currentPath === '/'} className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent">
+                    <button onClick={handleUp} disabled={!currentPath || currentPath === '/'} className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-gray-300">
                         <ArrowUp size={16} />
                     </button>
                 </div>
 
-                <div className="flex-1 bg-gray-900 rounded border border-gray-700 flex items-center px-2">
-                    <FolderOpen size={14} className="text-gray-500 mr-2" />
+                <div className="flex-1 bg-gray-900/50 rounded border border-gray-700 flex items-center px-2 hover:border-gray-600 transition-colors">
+                    <span className="text-gray-500 mr-2 text-xs">/</span>
                     <input
-                        className="bg-transparent border-none w-full text-sm py-1.5 focus:outline-none text-gray-200"
+                        className="bg-transparent border-none w-full text-xs py-1.5 focus:outline-none text-gray-200 font-mono"
                         value={addressBar}
                         onChange={(e) => setAddressBar(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && navigateTo(addressBar)}
@@ -179,23 +249,36 @@ const FileBrowserWidget: React.FC = () => {
                 </div>
 
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-                <button onClick={handleUploadClick} disabled={uploading} className="p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors">
+                <button onClick={handleUploadClick} disabled={uploading} className="p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors" title="Upload File">
                     {uploading ? <Loader size={16} className="animate-spin" /> : <Upload size={16} />}
                 </button>
             </div>
 
             <div className="flex-1 flex min-h-0">
                 {/* Sidebar */}
-                <div className="w-48 bg-gray-800/50 border-r border-gray-700 flex flex-col p-2 gap-1 overflow-y-auto">
-                    <div className="text-xs font-bold text-gray-500 px-2 py-1 uppercase tracking-wider">Places</div>
-                    {places.map(p => (
-                        <button
-                            key={p.name}
-                            onClick={() => navigateTo(p.path)}
-                            className={`flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left transition-colors ${currentPath === p.path ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}
-                        >
-                            {p.icon} {p.name}
+                <div className="w-48 bg-gray-800/30 border-r border-gray-700 flex flex-col p-2 gap-1 overflow-y-auto">
+                    <div className="flex justify-between items-center px-2 py-1">
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Places</span>
+                        <button onClick={addPlace} className="text-gray-500 hover:text-blue-400" title="Bookmark current folder">
+                            <Plus size={12} />
                         </button>
+                    </div>
+                    {places.map(p => (
+                        <div key={p.path} className="group relative">
+                            <button
+                                onClick={() => navigateTo(p.path)}
+                                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left transition-colors ${currentPath === p.path ? 'bg-blue-600/20 text-blue-300' : 'text-gray-400 hover:bg-gray-700/50 hover:text-white'}`}
+                            >
+                                <span className={currentPath === p.path ? 'text-blue-400' : 'text-gray-500'}>{p.icon || <Folder size={16} />}</span>
+                                <span className="truncate">{p.name}</span>
+                            </button>
+                            <button
+                                onClick={(e) => removePlace(e, p.path)}
+                                className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 p-1"
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
                     ))}
                 </div>
 
@@ -264,6 +347,32 @@ const FileBrowserWidget: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            {/* Creation Modal */}
+            {creationType && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+                    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 shadow-xl w-64">
+                        <h3 className="text-sm font-semibold text-white mb-2">
+                            Create New {creationType === 'folder' ? 'Folder' : 'File'}
+                        </h3>
+                        <input
+                            autoFocus
+                            className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:border-blue-500 focus:outline-none mb-3"
+                            placeholder="Name..."
+                            value={newItemName}
+                            onChange={e => setNewItemName(e.target.value)}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') handleCreate();
+                                if (e.key === 'Escape') setCreationType(null);
+                            }}
+                        />
+                        <div className="flex justify-end gap-2">
+                            <button onClick={() => setCreationType(null)} className="text-xs text-gray-400 hover:text-white">Cancel</button>
+                            <button onClick={handleCreate} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded">Create</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

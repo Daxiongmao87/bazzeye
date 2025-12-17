@@ -22,91 +22,87 @@ const io = new Server(httpServer, {
 
 // Initialize services with socket if needed
 // Initialize services with socket if needed
-// moved below imports
-
-
 import { authService } from './services/AuthService';
 import { monitorService } from './services/MonitorService';
 import { steamService } from './services/SteamService';
 import { terminalService } from './services/TerminalService';
 import { systemControlService } from './services/SystemControlService';
 import { fileService } from './services/FileService';
+import { packageService } from './services/PackageService';
+import { layoutService } from './services/LayoutService';
+import { notificationService } from './services/NotificationService'; // [NEW]
+
 import multer from 'multer';
 import path from 'path';
 
 steamService.setSocket(io);
+systemControlService.setSocket(io); // [NEW] Wire system control
 
-const upload = multer({ dest: '/tmp/bazzeye-uploads' }); // Temp storage, we'll move it
+const upload = multer({ dest: '/tmp/bazzeye-uploads' });
 
 const PORT = process.env.PORT || 3000;
 
-// Serve static files from the React app
-const clientPath = path.join(__dirname, '../../client/dist');
-app.use(express.static(clientPath));
-
-// API routes first (so they take precedence)
-
-
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok' });
-});
-
-// File Download Route
-app.get('/api/files/download', (req, res) => {
-    // Basic auth check using query param or session? 
-    // For now, let's assume if they can hit this internal dashboard they are okay, 
-    // BUT we should ideally check the 'isSudo' status or similar if we could.
-    // Since this is a specialized local dashboard, we'll skip complex auth for MVP but recommend it.
-
-    // Actually, we can check a token or shared secret if we had one.
-    // Let's at least ensure path is valid.
-    const requestedPath = req.query.path as string;
-    if (!requestedPath) {
-        return res.status(400).send('Missing path');
-    }
-
-    // Resolve absolute path
-    // For safety, might want to restrict, but user asked for file transfer.
-    res.download(requestedPath, (err) => {
-        if (err) {
-            if (!res.headersSent) res.status(500).send('Download failed: ' + err.message);
-        }
-    });
-});
-
-// File Upload Route
-app.post('/api/files/upload', upload.single('file'), async (req: any, res: any) => {
-    // Target path should be in body
-    const targetPath = req.body.path;
-    const file = req.file;
-
-    if (!targetPath || !file) {
-        return res.status(400).send('Missing path or file');
-    }
-
-    try {
-        const fs = require('fs');
-        const dest = path.join(targetPath, file.originalname);
-
-        // Move from temp to dest
-        await fs.promises.rename(file.path, dest);
-        res.json({ success: true, message: 'Uploaded successfully' });
-    } catch (err: any) {
-        res.status(500).json({ success: false, message: err.message });
-    }
-});
+// ... (existing static/api code)
 
 io.on('connection', (socket) => {
     console.log('Client connected:', socket.id);
 
     // Send initial state
     socket.emit('auth:status', authService.isSudo());
-    // Send history immediately
+    // Check if password setup is needed
+    if (!authService.hasPassword()) {
+        socket.emit('auth:needs-setup');
+    }
+
+    // Send history
     socket.emit('system-stats-history', monitorService.getHistory());
 
+    // --- Auth Events ---
     socket.on('auth:request-toggle', () => {
-        const newStatus = authService.toggleSudo();
-        io.emit('auth:status', newStatus); // Broadcast to all clients
+        const result = authService.requestToggleSudo();
+        if (result.success) {
+            io.emit('auth:status', authService.isSudo());
+        } else if (result.requiresPassword) {
+            socket.emit('auth:require-password');
+        }
+    });
+
+    socket.on('auth:verify-password', async (password: string) => {
+        const isValid = await authService.verifyPassword(password);
+        if (isValid) {
+            authService.setSudo(true);
+            io.emit('auth:status', true);
+            socket.emit('auth:verify-success');
+        } else {
+            socket.emit('auth:verify-fail');
+        }
+    });
+
+    socket.on('auth:set-password', async ({ password, oldPassword }: any) => {
+        // If setting initial password, oldPassword not needed if hasPassword() is false
+        if (authService.hasPassword()) {
+            const isValid = await authService.verifyPassword(oldPassword);
+            if (!isValid) {
+                socket.emit('auth:set-password-error', 'Invalid old password');
+                return;
+            }
+        }
+        await authService.setPassword(password); // pass null/empty to remove
+        socket.emit('auth:set-password-success');
+        if (!authService.hasPassword()) {
+            socket.emit('auth:needs-setup'); // Technically going back to setup state? Or just insecure.
+        }
+    });
+
+    // --- Layout Events [NEW] ---
+    socket.on('layout:get', () => {
+        socket.emit('layout:data', layoutService.getLayout());
+    });
+
+    socket.on('layout:save', ({ layouts, extras }: any) => {
+        layoutService.saveLayout(layouts, extras);
+        // Broadcast to other clients?
+        socket.broadcast.emit('layout:updated', { layouts, extras });
     });
 
     socket.on('steam:request-games', async () => {
@@ -149,7 +145,13 @@ io.on('connection', (socket) => {
         if (action === 'update') {
             // Trigger update
             systemControlService.updateSystem()
-                .then(() => socket.emit('system:update-status', { status: 'complete' }))
+                .then(() => {
+                    socket.emit('system:update-status', { status: 'complete' });
+                    notificationService.sendNotification({
+                        title: 'System Update Complete',
+                        body: 'The system update has finished successfully. Please reboot.'
+                    });
+                })
                 .catch(err => socket.emit('system:update-status', { status: 'error', error: err.message }));
             socket.emit('system:update-status', { status: 'started' });
         }
@@ -182,6 +184,91 @@ io.on('connection', (socket) => {
         const parentDir = path.dirname(filePath);
         const files = await fileService.listFiles(parentDir);
         socket.emit('files:list-data', files);
+    });
+
+    socket.on('files:create-folder', async ({ path: folderPath }) => {
+        if (!authService.isSudo()) return; // Optional check
+        await fileService.createFolder(folderPath);
+        // Refresh parent
+        const parentDir = path.dirname(folderPath);
+        // actually, if we create a folder inside current view, we might want to refresh current view
+        // The passed path is the FULL path to the new folder.
+        const result = await fileService.listFiles(parentDir);
+        socket.emit('files:list-data', result);
+    });
+
+    socket.on('files:create-file', async ({ path: filePath }) => {
+        if (!authService.isSudo()) return;
+        await fileService.createFile(filePath);
+        const parentDir = path.dirname(filePath);
+        const result = await fileService.listFiles(parentDir);
+        socket.emit('files:list-data', result);
+    });
+
+    // --- Ujust Events ---
+    socket.on('ujust:list', async () => {
+        const recipes = await systemControlService.getUjustRecipes();
+        socket.emit('ujust:list-data', recipes);
+    });
+
+    socket.on('ujust:execute', async ({ recipe }) => {
+        // if (!authService.isSudo()) return; // Should we enforce sudo? Maybe.
+        try {
+            await systemControlService.executeUjust(recipe);
+            socket.emit('ujust:status', { recipe, status: 'success' });
+        } catch (e: any) {
+            socket.emit('ujust:status', { recipe, status: 'error', error: e.message });
+        }
+    });
+
+    // --- Package Manager Events ---
+    // --- Package Manager Events ---
+    socket.on('package:search', async (query: string) => {
+        const results = await packageService.search(query);
+        socket.emit('package:search-results', results);
+    });
+
+    socket.on('package:list-layered', async () => {
+        const pkgs = await packageService.getLayeredPackages();
+        socket.emit('package:layered-list', pkgs);
+    });
+
+    socket.on('package:install', async (pkg: string) => {
+        if (!authService.isSudo()) return;
+        socket.emit('package:status', { pkg, status: 'installing' });
+        try {
+            await packageService.install(pkg);
+            socket.emit('package:status', { pkg, status: 'installed' });
+            // Refresh list
+            const pkgs = await packageService.getLayeredPackages();
+            socket.emit('package:layered-list', pkgs);
+        } catch (e: any) {
+            socket.emit('package:status', { pkg, status: 'error', error: e.message });
+        }
+    });
+
+    socket.on('package:uninstall', async (pkg: string) => {
+        if (!authService.isSudo()) return;
+        socket.emit('package:status', { pkg, status: 'uninstalling' });
+        try {
+            await packageService.uninstall(pkg);
+            socket.emit('package:status', { pkg, status: 'uninstalled' });
+            // Refresh list
+            const pkgs = await packageService.getLayeredPackages();
+            socket.emit('package:layered-list', pkgs);
+        } catch (e: any) {
+            socket.emit('package:status', { pkg, status: 'error', error: e.message });
+        }
+    });
+
+    // --- Notification Events ---
+    socket.on('notifications:get-key', () => {
+        socket.emit('notifications:key', notificationService.getPublicKey());
+    });
+
+    socket.on('notifications:subscribe', (subscription: any) => {
+        notificationService.subscribe(subscription);
+        console.log('New Push Subscription registered');
     });
 
     socket.on('disconnect', () => {

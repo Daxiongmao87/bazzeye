@@ -13,7 +13,10 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/multer": "^2.0.0",
+    "@types/web-push": "^3.6.4",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
@@ -23,6 +26,7 @@
     "ssh2": "^1.17.0",
     "systeminformation": "^5.27.14",
     "vdf": "^0.0.2",
+    "web-push": "^3.6.7",
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0"
   },

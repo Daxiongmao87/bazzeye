@@ -1,19 +1,26 @@
 
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
+import { notificationService } from './NotificationService'; // Added import
 
 const execAsync = promisify(exec);
+
 
 class SystemControlService {
 
 
     private updateAvailable: boolean = false;
     private checkInterval: NodeJS.Timeout | null = null;
+    private io: any = null;
 
     constructor() {
         // Start polling for updates (1 hour)
         this.checkForUpdates();
         this.checkInterval = setInterval(() => this.checkForUpdates(), 3600000);
+    }
+
+    public setSocket(io: any) {
+        this.io = io;
     }
 
     public async checkForUpdates() {
@@ -38,10 +45,16 @@ class SystemControlService {
                 // Let's assume if it lists changes, we have updates.
                 this.updateAvailable = true;
             }
+            if (this.io) {
+                this.io.emit('system:update-available', this.updateAvailable);
+            }
         } catch (e: any) {
             // If command fails (e.g. no network, or not on ostree), assume false
             console.error('[SystemControl] Update check failed:', e.message);
             this.updateAvailable = false;
+            if (this.io) {
+                this.io.emit('system:update-available', this.updateAvailable);
+            }
         }
         return this.updateAvailable;
     }
@@ -128,8 +141,57 @@ class SystemControlService {
         return results;
     }
 
-    // Kept for backward compat if needed, but getSmartStatus is preferred
-    public async getSmartData() { return this.getSmartStatus(); }
+    // ... (existing content)
+
+    public async getUjustRecipes(): Promise<Record<string, string[]>> {
+        try {
+            const { stdout } = await execAsync('ujust --list');
+            // Output format:
+            // Available recipes:
+            //     recipe-name
+            //     [category]
+            //     recipe-in-category
+
+            const categories: Record<string, string[]> = { 'uncategorized': [] };
+            let currentCategory = 'uncategorized';
+
+            const lines = stdout.split('\n');
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                if (trimmed.startsWith('Available recipes')) continue;
+
+                if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                    currentCategory = trimmed.slice(1, -1);
+                    categories[currentCategory] = [];
+                } else {
+                    // It's a recipe
+                    // "    recipe-name # description"
+                    // We only want the name for execution, but maybe description is useful?
+                    // For now, just name.
+                    const name = trimmed.split(/\s+/)[0];
+                    if (name) {
+                        categories[currentCategory].push(name);
+                    }
+                }
+            }
+            return categories;
+        } catch (e: any) {
+            console.error('[SystemControl] Failed to list ujust recipes:', e.message);
+            return {};
+        }
+    }
+
+    public async executeUjust(recipe: string) {
+        // Validation: ensures recipe is simple alphanumeric/dashes
+        if (!/^[a-zA-Z0-9\-\_]+$/.test(recipe)) {
+            throw new Error('Invalid recipe name');
+        }
+
+        console.log(`[SystemControl] Executing ujust ${recipe}`);
+        return execAsync(`ujust ${recipe}`);
+    }
+
 }
 
 export const systemControlService = new SystemControlService();
