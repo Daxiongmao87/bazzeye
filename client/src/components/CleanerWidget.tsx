@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSocket } from '../contexts/SocketContext';
-import { Sparkles, Play, Clock, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Sparkles, Play, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export const CleanerWidget: React.FC = () => {
@@ -69,8 +69,8 @@ export const CleanerWidget: React.FC = () => {
                             onClick={runClean}
                             disabled={!isSudo}
                             className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${isSudo
-                                    ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:scale-105 shadow-lg shadow-teal-900/50 text-white'
-                                    : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
+                                ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:scale-105 shadow-lg shadow-teal-900/50 text-white'
+                                : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
                                 }`}
                         >
                             <Play size={18} fill="currentColor" />
