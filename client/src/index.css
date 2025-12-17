@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@layer base {
+  body {
+    @apply bg-gray-900 text-white antialiased;
+  }
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-gray-900;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-700 rounded-full border-2 border-gray-900;
+  }
+
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-600;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-600;
+  }
+}
+
+/* Global XTerm Scrollbar Override - Must be outside layer to ensure specificity */
+.xterm-viewport::-webkit-scrollbar {
+  width: 10px;
+}
+
+.xterm-viewport::-webkit-scrollbar-track {
+  @apply bg-gray-950;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  @apply bg-gray-700 rounded-full border-2 border-gray-950;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-600;
+}

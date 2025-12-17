@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+deploy.sh
+deploy_pkg
+*.log
+.DS_Store
+.idea
+.vscode
+coverage
+node_dist
+node

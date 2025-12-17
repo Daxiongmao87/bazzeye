@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/home/patrick/projects/bazzeye/server/logs/.93c1bf8ef373812bb798afc5dd3859f0bc416f24-audit.json",
+    "files": [
+        {
+            "date": 1765921040607,
+            "name": "/home/patrick/projects/bazzeye/server/logs/system-2025-12-16.log",
+            "hash": "3cea33074c749ca44c0bed9b8b170aa3a0ee075fc2618e5829bfac6b6ae18be2"
+        }
+    ],
+    "hashType": "sha256"
+}

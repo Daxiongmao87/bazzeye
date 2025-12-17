@@ -1,0 +1,21 @@
+{
+  "name": "bazzeye",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "install:all": "npm install && cd server && npm install && cd .. && cd client && npm install",
+    "build": "cd server && npm run build && cd .. && cd client && npm run build",
+    "deploy": "./deploy.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
