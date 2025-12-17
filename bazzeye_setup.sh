@@ -90,16 +90,11 @@ if [[ ! $REPLY =~ ^[Nn]$ ]]; then
     echo "Ensuring build dependencies (build tools)..."
     # Wrap in bash -c to avoid OCI/ioctl errors
     # Note: We do NOT install nodejs/npm here. We use the bundled one.
-    if ! distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "sudo dnf install -y git python3 make gcc-c++ && sudo dnf remove -y nodejs npm 2>/dev/null || true"; then
+    if ! distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "sudo dnf install -y git python3 make gcc-c++"; then
         echo -e "${RED}Error: Failed to install dependencies in container.${NC}"
         read -p "Continue with service setup anyway? (y/N) " -r
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi
     else
-        # Cleaup previous artifacts to force rebuild
-        echo "Cleaning previous build artifacts..."
-        rm -rf "$CURRENT_DIR/server/node_modules" "$CURRENT_DIR/server/dist"
-        rm -rf "$CURRENT_DIR/client/node_modules" "$CURRENT_DIR/client/dist"
-
         # Build Project
         echo -e "${GREEN}Running Build inside container...${NC}"
         echo "Project Path: $CURRENT_DIR"
@@ -133,6 +128,50 @@ else
 fi
 
 
+
+# Runtime Setup
+echo -e "${GREEN}Setting up Runtime Environment...${NC}"
+NODE_VERSION="v22.12.0"
+NODE_DIST="node-${NODE_VERSION}-linux-x64"
+RUNTIME_DIR="$CURRENT_DIR/runtime"
+
+if [ ! -d "$RUNTIME_DIR/node/bin" ]; then
+    echo "Downloading Node.js ${NODE_VERSION}..."
+    mkdir -p "$RUNTIME_DIR"
+    curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/${NODE_DIST}.tar.xz" -o "$RUNTIME_DIR/node.tar.xz"
+    
+    echo "Extracting Node.js..."
+    mkdir -p "$RUNTIME_DIR/node"
+    tar -xJf "$RUNTIME_DIR/node.tar.xz" -C "$RUNTIME_DIR/node" --strip-components=1
+    rm "$RUNTIME_DIR/node.tar.xz"
+    
+    # Verification
+    if [ ! -f "$RUNTIME_DIR/node/bin/node" ]; then
+        echo -e "${RED}Error: Node.js binary not found at $RUNTIME_DIR/node/bin/node${NC}"
+        echo "Extraction might have failed or folder structure changed."
+        exit 1
+    fi
+    
+
+
+    echo "Node.js setup complete."
+else
+    echo "Node.js runtime already exists."
+fi
+
+# Permissions & SELinux (Critical for Systemd on Fedora/Bazzite)
+# We apply this every time to ensure updates/copies didn't break it
+echo "Applying permissions..."
+chmod +x "$RUNTIME_DIR/node/bin/node"
+
+# restorecon reverts to default policy (which might be 'user_home_t' -> non-executable by systemd)
+# We MUST use chcon to force 'bin_t' or 'unconfined_exec_t' so systemd can exec it.
+if command -v chcon &> /dev/null; then
+    echo "Forcing SELinux executable context (bin_t)..."
+    chcon -R -t bin_t "$RUNTIME_DIR" || echo "Warning: SELinux chcon failed"
+fi
+
+echo -e "${GREEN}Setup Complete!${NC}"
 echo -e "${GREEN}Setup Complete!${NC}"
 echo -e "You can now run the server manually using: ./start_server.sh"
 
@@ -141,11 +180,33 @@ echo ""
 echo "----------------------------------------------------------------"
 read -p "Do you want to install Bazzeye as a system service? (y/N) " -r
 if [[ $REPLY =~ ^[Yy]$ ]]; then
+    ORIGINAL_USER="$USER"
+    ORIGINAL_GROUP=$(id -gn)
+    WORKING_DIR="$CURRENT_DIR"
+    
+    # Create dedicated bazzeye system user (if it doesn't exist)
+    echo "Setting up bazzeye service user..."
+    if ! id -u bazzeye &>/dev/null; then
+        echo "Creating 'bazzeye' system user..."
+        sudo useradd --system --shell /usr/sbin/nologin --no-create-home bazzeye
+    else
+        echo "'bazzeye' user already exists."
+    fi
+    
+    # Store original owner in config file
+    echo "Storing original owner: $ORIGINAL_USER"
+    echo "BAZZEYE_OWNER=$ORIGINAL_USER" | sudo tee /etc/bazzeye.conf > /dev/null
+    sudo chmod 644 /etc/bazzeye.conf
+    
+    # Grant bazzeye user read access to the application directory
+    echo "Setting up directory permissions..."
+    sudo chown -R "$ORIGINAL_USER:bazzeye" "$WORKING_DIR"
+    sudo chmod -R g+rX "$WORKING_DIR"
+    # Storage directory needs write access
+    sudo chmod -R g+rwX "$WORKING_DIR/server/storage" 2>/dev/null || true
+    
     # Generate Service File
     SERVICE_FILE="bazzeye.service"
-    SERVICE_USER="$USER"
-    SERVICE_GROUP=$(id -gn)
-    WORKING_DIR="$CURRENT_DIR"
     EXEC_START="$WORKING_DIR/runtime/node/bin/node $WORKING_DIR/server/dist/index.js"
 
     echo "Generating $SERVICE_FILE..."
@@ -156,8 +217,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=$SERVICE_USER
-Group=$SERVICE_GROUP
+User=bazzeye
+Group=bazzeye
 WorkingDirectory=$WORKING_DIR
 ExecStart=$EXEC_START
 Restart=on-failure
@@ -183,53 +244,62 @@ EOF
     fi
     echo -e "${GREEN}Service installed and started!${NC}"
     echo "Check status with: systemctl status bazzeye"
-else
-    echo "Skipping service installation."
-    echo "A 'bazzeye.service' file has NOT been generated to avoid overwriting existing configs."
-fi
-
-# Sudo Permissions
-echo ""
-echo "----------------------------------------------------------------"
-echo "Bazzeye supports system controls like Reboot, Shutdown, and Update."
-echo "Running as a regular user requires password-less sudo permission for these specific commands."
-read -p "Do you want to configure password-less sudo for Bazzeye controls? (y/N) " -r
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    # Detect paths
+    
+    # Configure sudo permissions for bazzeye user
+    echo ""
+    echo "----------------------------------------------------------------"
+    echo "Configuring sudo permissions for bazzeye service user..."
+    echo "(Your user's sudo behavior will NOT be changed)"
+    
+    # Detect command paths
     CMD_REBOOT=$(command -v reboot || echo "/usr/sbin/reboot")
     CMD_SHUTDOWN=$(command -v shutdown || echo "/usr/sbin/shutdown")
     CMD_SMARTCTL=$(command -v smartctl || echo "/usr/sbin/smartctl")
     CMD_UJUST=$(command -v ujust || echo "/usr/bin/ujust")
     CMD_RPMOSTREE=$(command -v rpm-ostree || echo "/usr/bin/rpm-ostree")
-    CMD_SYSTEMCTL=$(command -v systemctl || echo "/usr/bin/systemctl") # Optional if you want app to control services
+    CMD_TEST=$(command -v test || echo "/usr/bin/test")
+    CMD_FIND=$(command -v find || echo "/usr/bin/find")
+    CMD_RM=$(command -v rm || echo "/usr/bin/rm")
+    CMD_MKDIR=$(command -v mkdir || echo "/usr/bin/mkdir")
+    CMD_TOUCH=$(command -v touch || echo "/usr/bin/touch")
+    CMD_CHOWN=$(command -v chown || echo "/usr/bin/chown")
+    CMD_SUDO=$(command -v sudo || echo "/usr/bin/sudo")
 
     SUDOERS_FILE="/etc/sudoers.d/bazzeye"
-    USER_NAME="$USER"
     
-    # Check if we are root
-    if [ "$EUID" -ne 0 ]; then
-        echo "Root privileges required to write to $SUDOERS_FILE"
-        # We construct the file locally then move it? Or justtee. 
-        # Using tee is safer.
-        echo "Creating sudoers rule for user '$USER_NAME'..."
-        
-        # Rule: user ALL=(ALL) NOPASSWD: path1, path2...
-        RULE="$USER_NAME ALL=(ALL) NOPASSWD: $CMD_REBOOT, $CMD_SHUTDOWN, $CMD_SMARTCTL, $CMD_UJUST, $CMD_RPMOSTREE"
-        
-        # We use a temp file
-        echo "$RULE" | sudo tee "$SUDOERS_FILE" > /dev/null
-        sudo chmod 0440 "$SUDOERS_FILE"
-        echo "Sudoers configuration applied!"
+    # Build sudoers rules
+    # 1. System control commands (run as root)
+    SYSTEM_CMDS="$CMD_REBOOT, $CMD_SHUTDOWN, $CMD_SMARTCTL, $CMD_UJUST, $CMD_RPMOSTREE, $CMD_TEST, $CMD_FIND, $CMD_RM, $CMD_MKDIR, $CMD_TOUCH, $CMD_CHOWN"
+    RULE1="bazzeye ALL=(ALL) NOPASSWD: $SYSTEM_CMDS"
+    
+    # 2. Allow bazzeye to run any command as the original user (for terminals, file ops)
+    RULE2="bazzeye ALL=($ORIGINAL_USER) NOPASSWD: ALL"
+    
+    echo "Creating sudoers rules for 'bazzeye' service user..."
+    {
+        echo "# Bazzeye service user sudo rules"
+        echo "# System control commands (as root)"
+        echo "$RULE1"
+        echo ""
+        echo "# Run commands as original owner: $ORIGINAL_USER"
+        echo "$RULE2"
+    } | sudo tee "$SUDOERS_FILE" > /dev/null
+    sudo chmod 0440 "$SUDOERS_FILE"
+    
+    # Verify sudoers syntax
+    if sudo visudo -cf "$SUDOERS_FILE" &>/dev/null; then
+        echo -e "${GREEN}Sudoers configuration applied successfully!${NC}"
     else
-        echo "Creating sudoers rule for user '$USER_NAME'..."
-        RULE="$USER_NAME ALL=(ALL) NOPASSWD: $CMD_REBOOT, $CMD_SHUTDOWN, $CMD_SMARTCTL, $CMD_UJUST, $CMD_RPMOSTREE"
-        echo "$RULE" > "$SUDOERS_FILE"
-        chmod 0440 "$SUDOERS_FILE"
-        echo "Sudoers configuration applied!"
+        echo -e "${RED}Warning: Sudoers file may have syntax errors. Please check manually.${NC}"
     fi
+    
+    echo ""
+    echo -e "${GREEN}Setup Complete!${NC}"
+    echo "The Bazzeye service runs as 'bazzeye' user."
+    echo "Terminals and file operations will run as '$ORIGINAL_USER'."
+    echo "Your user's sudo behavior is UNCHANGED."
 else
-    echo "Skipping sudoers configuration."
-    echo "If you want to use system controls later, you may need to configure sudo yourself."
+    echo "Skipping service installation."
+    echo "A 'bazzeye.service' file has NOT been generated to avoid overwriting existing configs."
 fi
-
 

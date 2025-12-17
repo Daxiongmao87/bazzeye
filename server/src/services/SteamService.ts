@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import * as vdf from 'vdf';
 import { execSync } from 'child_process';
+import { ownerService } from './OwnerService';
 
 interface SteamGame {
     appid: string;
@@ -20,12 +21,8 @@ interface MonitorResult {
 
 class SteamService {
     // Initial known paths to check first (fast path)
-    private steamPaths: string[] = [
-        path.join(os.homedir(), '.steam/steam'),
-        path.join(os.homedir(), '.local/share/Steam'),
-        path.join(os.homedir(), '.var/app/com.valvesoftware.Steam/.steam/steam'), // Flatpak
-        path.join(os.homedir(), '.steam/debian-installation'),
-    ];
+    // These will be populated with owner's home in constructor
+    private steamPaths: string[] = [];
 
     private foundSteamPath: string | null = null;
     private knownGames: SteamGame[] = [];
@@ -34,6 +31,15 @@ class SteamService {
     private hasWarnedMissing: boolean = false;
 
     constructor() {
+        // Set up steam paths using owner's home directory
+        const ownerHome = ownerService.getOwnerHome();
+        this.steamPaths = [
+            path.join(ownerHome, '.steam/steam'),
+            path.join(ownerHome, '.local/share/Steam'),
+            path.join(ownerHome, '.var/app/com.valvesoftware.Steam/.steam/steam'), // Flatpak
+            path.join(ownerHome, '.steam/debian-installation'),
+        ];
+
         // Initial discovery
         this.discoverSteamPath().then(() => {
             this.getGames(); // Populate cache
@@ -89,11 +95,15 @@ class SteamService {
             // But let's stick to libraryfolders.vdf for now as primary target + directories named "SteamLibrary"
             // Actually, finding "SteamLibrary" directories is a good fallback if the VDF is missing.
 
-            // " -type f -name 'libraryfolders.vdf' -print "
+            // \" -type f -name 'libraryfolders.vdf' -print \"
             cmd += ` -type f -name "libraryfolders.vdf" -print`;
 
-            console.log(`[SteamService] Executing global search: ${cmd}`);
-            const output = execSync(cmd, { timeout: 30000, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
+            // Run as owner to access their home directory
+            const owner = ownerService.getOwner();
+            const fullCmd = `sudo -u ${owner} ${cmd}`;
+
+            console.log(`[SteamService] Executing global search as ${owner}: ${cmd}`);
+            const output = execSync(fullCmd, { timeout: 30000, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
             // stdio ignore stderr to suppress "Permission denied" spam
 
             const paths = output.split('\n').filter(p => p.trim().length > 0);

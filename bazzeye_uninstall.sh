@@ -48,6 +48,26 @@ if [ -f "/etc/sudoers.d/bazzeye" ]; then
     fi
 fi
 
+# Remove bazzeye config file
+if [ -f "/etc/bazzeye.conf" ]; then
+    echo "Removing config file (/etc/bazzeye.conf)..."
+    if [ "$EUID" -ne 0 ]; then
+        sudo rm -f /etc/bazzeye.conf
+    else
+        rm -f /etc/bazzeye.conf
+    fi
+fi
+
+# Remove bazzeye system user
+if id -u bazzeye &>/dev/null; then
+    echo "Removing 'bazzeye' system user..."
+    if [ "$EUID" -ne 0 ]; then
+        sudo userdel bazzeye || echo "Warning: Failed to remove bazzeye user"
+    else
+        userdel bazzeye || echo "Warning: Failed to remove bazzeye user"
+    fi
+fi
+
 # 2. Remove Artifacts
 
 echo "Cleaning up local files..."

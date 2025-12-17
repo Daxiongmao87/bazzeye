@@ -3,6 +3,7 @@ import * as pty from 'node-pty';
 import { Socket } from 'socket.io';
 import fs from 'fs';
 import path from 'path';
+import { ownerService } from './OwnerService';
 
 interface TerminalSession {
     id: string;
@@ -28,6 +29,7 @@ class TerminalService {
             fs.mkdirSync(dir, { recursive: true });
         }
     }
+
 
     private loadSessions() {
         if (fs.existsSync(this.CONFIG_FILE)) {
@@ -104,20 +106,38 @@ class TerminalService {
     // ... spawnProcess logic ...
 
     private spawnProcess(socket: Socket, id: string, command: string | null) {
-        const file = command ? '/bin/bash' : (process.env.SHELL || '/bin/bash');
-        let args: string[] = [];
+        const owner = ownerService.getOwner();
+        const ownerHome = ownerService.getOwnerHome();
+
+        // Use sudo to spawn a shell as the original owner
+        // -u: run as user, -i: login shell (loads user's environment)
+        let file = '/usr/bin/sudo';
+        let args: string[];
 
         if (command) {
-            // Loop wrapper for auto-restart
-            args = ['-c', `while true; do echo "Starting: ${command}"; ${command}; echo "Command exited, restarting in 1s..."; sleep 1; done`];
+            // Loop wrapper for auto-restart, running as owner
+            const escapedCmd = command.replace(/'/g, "'\\''");
+            args = [
+                '-u', owner, '-i',
+                'bash', '-c',
+                `while true; do echo "Starting: ${escapedCmd}"; ${escapedCmd}; echo "Command exited, restarting in 1s..."; sleep 1; done`
+            ];
+        } else {
+            // Interactive login shell as owner
+            args = ['-u', owner, '-i'];
         }
 
         const ptyProcess = pty.spawn(file, args, {
             name: 'xterm-color',
             cols: 80,
             rows: 30,
-            cwd: process.env.HOME,
-            env: process.env as any
+            cwd: ownerHome,
+            env: {
+                ...process.env,
+                HOME: ownerHome,
+                USER: owner,
+                LOGNAME: owner
+            } as any
         });
 
         ptyProcess.onData((data) => {
@@ -125,8 +145,9 @@ class TerminalService {
         });
 
         this.sessions.set(id, { id, ptyProcess, command_str: command || undefined });
-        console.log(`[TerminalService] Created terminal ${id}`);
+        console.log(`[TerminalService] Created terminal ${id} as user ${owner}`);
     }
+
 
     public resize(id: string, cols: number, rows: number) {
         const session = this.sessions.get(id);
