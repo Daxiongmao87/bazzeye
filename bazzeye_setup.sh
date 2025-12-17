@@ -200,6 +200,19 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     
     # Grant bazzeye user read access to the application directory
     echo "Setting up directory permissions..."
+    
+    # Make parent directories traversable (e.g., /home/steam needs o+x for bazzeye to cd into subdirs)
+    # We iterate up the path and add execute permission for "others" on each parent
+    CURRENT_PATH="$WORKING_DIR"
+    while [ "$CURRENT_PATH" != "/" ]; do
+        PARENT_PATH=$(dirname "$CURRENT_PATH")
+        if [ "$PARENT_PATH" != "/" ]; then
+            echo "  Ensuring traversal permission on: $PARENT_PATH"
+            sudo chmod o+x "$PARENT_PATH" 2>/dev/null || true
+        fi
+        CURRENT_PATH="$PARENT_PATH"
+    done
+    
     sudo chown -R "$ORIGINAL_USER:bazzeye" "$WORKING_DIR"
     sudo chmod -R g+rX "$WORKING_DIR"
     # Storage directory needs write access
