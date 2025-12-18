@@ -59,6 +59,7 @@ io.on('connection', (socket) => {
     console.log('Client connected:', socket.id);
 
     // Send initial state
+    console.log(`[Auth] Client connected, sending initial sudoMode: ${authService.isSudo()}`);
     socket.emit('auth:status', authService.isSudo());
     // Check if password setup is needed
     if (!authService.hasPassword()) {
@@ -75,7 +76,9 @@ io.on('connection', (socket) => {
 
     // --- Auth Events ---
     socket.on('auth:request-toggle', () => {
+        console.log(`[Auth] Toggle requested, current sudoMode: ${authService.isSudo()}`);
         const result = authService.requestToggleSudo();
+        console.log(`[Auth] Toggle result:`, result, `new sudoMode: ${authService.isSudo()}`);
         if (result.success) {
             io.emit('auth:status', authService.isSudo());
         } else if (result.requiresPassword) {

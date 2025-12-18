@@ -52,6 +52,7 @@ class AuthService {
     }
 
     public isSudo(): boolean {
+        console.log(`[AuthService] isSudo() called, returning: ${this.sudoMode}`);
         return this.sudoMode;
     }
 
