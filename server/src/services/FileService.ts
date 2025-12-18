@@ -30,40 +30,49 @@ class FileService {
         console.log(`[FileService] listFiles called: path="${requestPath}", useSudo=${useSudo}, targetPath="${targetPath}"`);
 
         if (useSudo) {
-            console.log(`[FileService] Using sudo path for: ${targetPath}`);
+            console.log(`[FileService] Using sudo (root) path for: ${targetPath}`);
             return this.listWithSudo(targetPath);
         }
 
-        console.log(`[FileService] Using non-sudo path for: ${targetPath}`);
+        // Non-sudo mode: run as owner
+        console.log(`[FileService] Using owner path for: ${targetPath}`);
+        return this.listAsOwner(targetPath);
+    }
 
+    /**
+     * List files as the original owner (e.g., steam).
+     * Can only access what the owner can access.
+     */
+    private async listAsOwner(dirPath: string): Promise<{ success: boolean, files?: FileEntry[], currentPath?: string, parentPath?: string, error?: string }> {
         try {
-            // Simple check to ensure we can read it
-            const stats = await stat(targetPath);
-            if (!stats.isDirectory()) {
-                return { success: false, error: 'Not a directory' };
+            const safePath = dirPath.replace(/'/g, "'\\''");
+
+            // Check if directory exists and is accessible to owner
+            try {
+                await ownerService.execAsOwner(`test -d '${safePath}'`);
+            } catch (e) {
+                return { success: false, error: 'Not a directory or access denied' };
             }
 
-            const entries = await readdir(targetPath, { withFileTypes: true });
+            // List entries as owner
+            const cmd = `find '${safePath}' -maxdepth 1 -mindepth 1 -printf "%y|%s|%f\\n"`;
+            const output = await ownerService.execAsOwner(cmd);
 
-            const files: FileEntry[] = await Promise.all(entries.map(async (entry) => {
-                const fullPath = path.join(targetPath, entry.name);
-                let size = 0;
-                try {
-                    const entryStats = await stat(fullPath);
-                    size = entryStats.size;
-                } catch (e) {
-                    // ignore permission errors for stats
-                }
+            const files: FileEntry[] = output.trim().split('\n').filter(l => l).map(line => {
+                const parts = line.split('|');
+                if (parts.length < 3) return null;
+                const typeChar = parts[0];
+                const size = parseInt(parts[1], 10);
+                const name = parts.slice(2).join('|');
 
                 return {
-                    name: entry.name,
-                    type: entry.isDirectory() ? 'directory' : 'file',
-                    size: size,
-                    path: fullPath
+                    name: name,
+                    type: typeChar === 'd' ? 'directory' : 'file',
+                    size: isNaN(size) ? 0 : size,
+                    path: path.join(dirPath, name)
                 };
-            }));
+            }).filter(f => f !== null) as FileEntry[];
 
-            // Sort directories first
             files.sort((a, b) => {
                 if (a.type === b.type) return a.name.localeCompare(b.name);
                 return a.type === 'directory' ? -1 : 1;
@@ -72,14 +81,18 @@ class FileService {
             return {
                 success: true,
                 files,
-                currentPath: targetPath,
-                parentPath: targetPath === '/' ? undefined : path.dirname(targetPath)
+                currentPath: dirPath,
+                parentPath: dirPath === '/' ? undefined : path.dirname(dirPath)
             };
         } catch (error: any) {
             return { success: false, error: error.message };
         }
     }
 
+    /**
+     * List files as root (sudo mode).
+     * Can access anything on the system.
+     */
     private async listWithSudo(dirPath: string): Promise<{ success: boolean, files?: FileEntry[], currentPath?: string, parentPath?: string, error?: string }> {
         try {
             // Escape path

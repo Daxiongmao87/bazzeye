@@ -241,9 +241,10 @@ io.on('connection', (socket) => {
     });
 
     socket.on('files:list', async (path: string) => {
-        // Always use sudo for file listing - the bazzeye service user 
-        // doesn't have read access to user directories
-        const result = await fileService.listFiles(path, true);
+        // useSudo determines privilege level:
+        // false = runs as owner (steam) - can only see owner's files
+        // true = runs as root - can see everything
+        const result = await fileService.listFiles(path, authService.isSudo());
         socket.emit('files:list-data', result);
     });
 
