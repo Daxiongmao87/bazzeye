@@ -12,3 +12,5 @@ node_dist
 node
 .git-backup/
 GEMINI.md
+runtime/
+server/logs/

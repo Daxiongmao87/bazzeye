@@ -90,7 +90,7 @@ if [[ ! $REPLY =~ ^[Nn]$ ]]; then
     echo "Ensuring build dependencies (build tools)..."
     # Wrap in bash -c to avoid OCI/ioctl errors
     # Note: We do NOT install nodejs/npm here. We use the bundled one.
-    if ! distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "sudo dnf install -y git python3 make gcc-c++"; then
+    if ! distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "sudo dnf install -y git python3 make gcc-c++" < /dev/null; then
         echo -e "${RED}Error: Failed to install dependencies in container.${NC}"
         read -p "Continue with service setup anyway? (y/N) " -r
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then exit 1; fi

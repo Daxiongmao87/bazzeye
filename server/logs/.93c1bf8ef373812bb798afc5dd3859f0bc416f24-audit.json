@@ -9,6 +9,11 @@
             "date": 1765921040607,
             "name": "/home/patrick/projects/bazzeye/server/logs/system-2025-12-16.log",
             "hash": "3cea33074c749ca44c0bed9b8b170aa3a0ee075fc2618e5829bfac6b6ae18be2"
+        },
+        {
+            "date": 1765994892179,
+            "name": "/home/patrick/projects/bazzeye/server/logs/system-2025-12-17.log",
+            "hash": "e5d560d76606465402bb2b9a4bfb0f814266dba29ff2f291a815ff39a5eaf402"
         }
     ],
     "hashType": "sha256"

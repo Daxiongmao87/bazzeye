@@ -17,6 +17,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!socket) return;
 
         socket.on('auth:status', (status: boolean) => {
+            console.log('[AuthContext] Received auth:status:', status);
             setIsSudo(status);
         });
 

@@ -335,7 +335,11 @@ const FileBrowserWidget: React.FC = () => {
                     ) : error ? (
                         <div className="flex flex-col items-center justify-center h-full text-red-400 gap-2">
                             <div className="text-lg font-semibold">Access Error</div>
-                            <div className="text-sm opacity-80">{error}</div>
+                            <div className="text-sm opacity-80">
+                                {(error && (error.includes('Permission denied') || error.includes('Failed to execute')))
+                                    ? 'Access Denied: You do not have permission to view this folder.'
+                                    : error}
+                            </div>
                             <button onClick={handleUp} className="mt-4 px-4 py-2 bg-gray-800 rounded hover:bg-gray-700 text-white text-sm">Go Up</button>
                         </div>
                     ) : (

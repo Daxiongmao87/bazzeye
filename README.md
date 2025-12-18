@@ -14,9 +14,6 @@
     -   Full XTerm.js integration.
     -   Multiple Tabs support.
     -   **Persistent Layout**: Add/Remove terminal cards and save their positions.
--   **File Manager**:
-    -   Browse and manage your filesystem.
-    -   **Root Access**: Create/Delete restricted files and folders when Sudo Mode is active.
 -   **System Actions (Bazzite/Ujust)**:
     -   **One-click Actions**: Update System, Fix Proton Hangs, Restart Audio Services, and Run Benchmarks directly from the UI.
     -   Powered by Bazzite's `ujust` command.
@@ -27,7 +24,7 @@
     -   Dedicated build script for immutable OS environments.
     -   No manual hacking of `node_modules` required—uses **Distrobox** for clean builds.
 -   **Security**:
-    -   **Password Protected Sudo Mode**: Secure critical actions (reboot, file operations, uninstalls) with a custom password.
+    -   **Password Protected Sudo Mode**: Secure critical actions (reboot, terminal input, uninstalls) with a custom password.
     -   **Session Timeout**: Sudo mode auto-locks after inactivity.
 
 ## Installation on Bazzite
@@ -41,12 +38,12 @@ cd bazzeye
 ```
 
 ### 2. Build with One Script
-We provide a helper script that automates the entire process:
+We provide a helper script that spins up a Fedora container, installs dependencies, and builds the project for you:
 
 ```bash
 ./bazzeye_setup.sh
 ```
-*This will download a portable Node.js runtime, create a temporary distrobox container, and build the project using the correct runtime to ensure compatibility.*
+*This will create a temporary distrobox container to build the app, then download a portable Node.js runtime for execution.*
 
 ### 3. Run Manually (Testing)
 ```bash
@@ -65,7 +62,7 @@ The script will automatically generate a valid Systemd service file for your spe
 
 ## Usage
 
-Access the dashboard at `http://<your-ip-address>`.
+Access the dashboard at `http://<your-ip-address>:3000`.
 
 *   **Edit Layout**: Click the **Settings (Cog)** icon to unlock the grid. You can then resize/move widgets or add new Terminal Cards (Plus icon).
 *   **Security**: Click the **Key** icon to set/change your dashboard password.
