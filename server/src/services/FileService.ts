@@ -85,7 +85,11 @@ class FileService {
                 parentPath: dirPath === '/' ? undefined : path.dirname(dirPath)
             };
         } catch (error: any) {
-            return { success: false, error: error.message };
+            console.error('[FileService] listAsOwner error:', error.message);
+            if (error.message && error.message.includes('Permission denied')) {
+                return { success: false, error: 'Access Denied' };
+            }
+            return { success: false, error: 'Failed to access directory' };
         }
     }
 
