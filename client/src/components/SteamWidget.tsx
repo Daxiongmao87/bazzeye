@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSocket } from '../contexts/SocketContext';
-import { Gamepad2 } from 'lucide-react';
+import { Gamepad2, Settings, X, Plus, FolderOpen } from 'lucide-react';
 
 interface SteamGame {
     appid: string;
@@ -15,11 +15,15 @@ const SteamWidget: React.FC = () => {
     const [games, setGames] = useState<SteamGame[]>([]);
     const [nowPlaying, setNowPlaying] = useState<SteamGame | null>(null);
     const [loading, setLoading] = useState(true);
+    const [showConfig, setShowConfig] = useState(false);
+    const [libraryPaths, setLibraryPaths] = useState<string[]>([]);
+    const [editingPaths, setEditingPaths] = useState<string[]>([]);
 
     useEffect(() => {
         if (!socket) return;
 
         socket.emit('steam:request-games');
+        socket.emit('steam:get-library-paths');
 
         socket.on('steam:games', (data: SteamGame[]) => {
             setGames(data);
@@ -30,17 +34,57 @@ const SteamWidget: React.FC = () => {
             setNowPlaying(game);
         });
 
+        socket.on('steam:library-paths', (paths: string[]) => {
+            setLibraryPaths(paths);
+        });
+
         return () => {
             socket.off('steam:games');
             socket.off('steam:now-playing');
+            socket.off('steam:library-paths');
         };
     }, [socket]);
 
+    const handleOpenConfig = () => {
+        setEditingPaths([...libraryPaths]);
+        setShowConfig(true);
+    };
+
+    const handleSavePaths = () => {
+        if (socket) {
+            socket.emit('steam:set-library-paths', editingPaths);
+        }
+        setShowConfig(false);
+    };
+
+    const handleAddPath = () => {
+        setEditingPaths([...editingPaths, '']);
+    };
+
+    const handleRemovePath = (index: number) => {
+        setEditingPaths(editingPaths.filter((_, i) => i !== index));
+    };
+
+    const handlePathChange = (index: number, value: string) => {
+        const newPaths = [...editingPaths];
+        newPaths[index] = value;
+        setEditingPaths(newPaths);
+    };
+
     return (
         <div className="h-full flex flex-col p-4">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <Gamepad2 size={20} className="text-indigo-400" /> Steam Library ({games.length})
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <Gamepad2 size={20} className="text-indigo-400" /> Steam Library ({games.length})
+                </h2>
+                <button
+                    onClick={handleOpenConfig}
+                    className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                    title="Configure Steam library paths"
+                >
+                    <Settings size={18} className="text-gray-400 hover:text-gray-200" />
+                </button>
+            </div>
 
             {nowPlaying && (
                 <div className="mb-4 p-3 rounded-lg bg-indigo-900/50 border border-indigo-500/50 flex items-center gap-4 animate-pulse-slow">
@@ -98,6 +142,82 @@ const SteamWidget: React.FC = () => {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Configuration Modal */}
+            {showConfig && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto custom-scrollbar shadow-2xl">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-semibold flex items-center gap-2">
+                                <FolderOpen size={20} className="text-indigo-400" />
+                                Steam Library Paths
+                            </h3>
+                            <button
+                                onClick={() => setShowConfig(false)}
+                                className="p-1 hover:bg-gray-800 rounded-lg transition-colors"
+                            >
+                                <X size={20} className="text-gray-400" />
+                            </button>
+                        </div>
+
+                        <p className="text-sm text-gray-400 mb-4">
+                            Configure the paths where your Steam library folders are located.
+                            These should point to the root Steam library directories (e.g., /mnt/games/SteamLibrary).
+                            Leave empty to use auto-detection.
+                        </p>
+
+                        <div className="space-y-3 mb-4">
+                            {editingPaths.length === 0 ? (
+                                <div className="text-gray-500 text-sm italic p-4 bg-gray-800/50 rounded-lg text-center">
+                                    No paths configured. Using auto-detection.
+                                </div>
+                            ) : (
+                                editingPaths.map((path, index) => (
+                                    <div key={index} className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={path}
+                                            onChange={(e) => handlePathChange(index, e.target.value)}
+                                            placeholder="/mnt/games/SteamLibrary"
+                                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+                                        />
+                                        <button
+                                            onClick={() => handleRemovePath(index)}
+                                            className="p-2 bg-red-900/30 hover:bg-red-900/50 border border-red-700 rounded-lg transition-colors"
+                                            title="Remove path"
+                                        >
+                                            <X size={18} className="text-red-400" />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <button
+                            onClick={handleAddPath}
+                            className="w-full mb-4 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Plus size={18} />
+                            Add Path
+                        </button>
+
+                        <div className="flex gap-2 justify-end">
+                            <button
+                                onClick={() => setShowConfig(false)}
+                                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSavePaths}
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+                            >
+                                Save & Rescan
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -12,9 +12,14 @@ export interface TerminalSettings {
     transparent: boolean;
 }
 
+export interface SteamSettings {
+    libraryPaths: string[];
+}
+
 export interface AppConfig {
     alerts: AlertSettings;
     terminal: TerminalSettings;
+    steam: SteamSettings;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -26,6 +31,9 @@ const DEFAULT_CONFIG: AppConfig = {
     },
     terminal: {
         transparent: false
+    },
+    steam: {
+        libraryPaths: []
     }
 };
 
@@ -57,7 +65,8 @@ class ConfigService {
                     ...DEFAULT_CONFIG,
                     ...data,
                     alerts: { ...DEFAULT_CONFIG.alerts, ...(data.alerts || {}) },
-                    terminal: { ...DEFAULT_CONFIG.terminal, ...(data.terminal || {}) }
+                    terminal: { ...DEFAULT_CONFIG.terminal, ...(data.terminal || {}) },
+                    steam: { ...DEFAULT_CONFIG.steam, ...(data.steam || {}) }
                 };
             }
         } catch (e) {
@@ -93,6 +102,9 @@ class ConfigService {
         if (updates.terminal) {
             this.config.terminal = { ...this.config.terminal, ...updates.terminal };
         }
+        if (updates.steam) {
+            this.config.steam = { ...this.config.steam, ...updates.steam };
+        }
         this.save();
         return this.config;
     }
@@ -107,6 +119,22 @@ class ConfigService {
         this.config.terminal = { ...this.config.terminal, ...updates };
         this.save();
         return this.config.terminal;
+    }
+
+    public updateSteam(updates: Partial<SteamSettings>) {
+        this.config.steam = { ...this.config.steam, ...updates };
+        this.save();
+        return this.config.steam;
+    }
+
+    public getSteamLibraryPaths(): string[] {
+        return this.config.steam.libraryPaths;
+    }
+
+    public setSteamLibraryPaths(paths: string[]) {
+        this.config.steam.libraryPaths = paths;
+        this.save();
+        return this.config.steam.libraryPaths;
     }
 }
 

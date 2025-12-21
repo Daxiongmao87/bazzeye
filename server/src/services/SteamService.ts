@@ -5,6 +5,7 @@ import os from 'os';
 import * as vdf from 'vdf';
 import { execSync } from 'child_process';
 import { ownerService } from './OwnerService';
+import { configService } from './ConfigService';
 
 interface SteamGame {
     appid: string;
@@ -120,65 +121,74 @@ class SteamService {
     }
 
     public async getGames(): Promise<SteamGame[]> {
-        // Collect all potential VDF files
-        const vdfPaths: string[] = [];
-
-        // 1. From standard path
-        if (this.foundSteamPath) {
-            vdfPaths.push(path.join(this.foundSteamPath, 'steamapps', 'libraryfolders.vdf'));
-            // Also config/config.vdf might be useful but libraryfolders is better for libraries
-        }
-
-        // 2. Deep search if necessary OR if we want to be thorough (user requested thoroughness)
-        // If we found the web (foundSteamPath), we might still want to look for external drives manually
-        // if they aren't mounted/known yet. But libraryfolders.vdf usually lists them.
-        // Let's do deep search if we have NO games, or only 1 library, or just simply always to be safe?
-        // User requested "search ... anywhere on the system".
-
-        const deepPaths = await this.findConfigPaths();
-        for (const p of deepPaths) {
-            if (!vdfPaths.includes(p)) vdfPaths.push(p);
-        }
-
-        if (vdfPaths.length === 0 && !this.foundSteamPath && !this.hasWarnedMissing) {
-            console.warn('[SteamService] Steam not found in standard locations and no libraryfolders.vdf discovered.');
-            this.hasWarnedMissing = true;
-            return [];
-        }
-
+        // Check for user-configured library paths first
+        const configuredPaths = configService.getSteamLibraryPaths();
         const libraryPaths = new Set<string>();
 
-        // Parse ALL found VDFs to find Library Paths
-        for (const vdfFile of vdfPaths) {
-            if (!fs.existsSync(vdfFile)) continue;
-            try {
-                const content = fs.readFileSync(vdfFile, 'utf-8');
-                const parsed = vdf.parse(content) as any;
+        if (configuredPaths.length > 0) {
+            // Use configured paths exclusively if set
+            console.log(`[SteamService] Using ${configuredPaths.length} configured library path(s)`);
+            configuredPaths.forEach(p => libraryPaths.add(p));
+        } else {
+            // Fall back to auto-detection
+            // Collect all potential VDF files
+            const vdfPaths: string[] = [];
 
-                // Format 1: libraryfolders { "0": { "path": "..." } }
-                if (parsed.libraryfolders) {
-                    for (const key in parsed.libraryfolders) {
-                        const entry = parsed.libraryfolders[key];
-                        if (entry && entry.path) {
-                            libraryPaths.add(entry.path);
-                        } else if (typeof entry === 'string') {
-                            // old format?
-                            libraryPaths.add(entry);
+            // 1. From standard path
+            if (this.foundSteamPath) {
+                vdfPaths.push(path.join(this.foundSteamPath, 'steamapps', 'libraryfolders.vdf'));
+                // Also config/config.vdf might be useful but libraryfolders is better for libraries
+            }
+
+            // 2. Deep search if necessary OR if we want to be thorough (user requested thoroughness)
+            // If we found the web (foundSteamPath), we might still want to look for external drives manually
+            // if they aren't mounted/known yet. But libraryfolders.vdf usually lists them.
+            // Let's do deep search if we have NO games, or only 1 library, or just simply always to be safe?
+            // User requested "search ... anywhere on the system".
+
+            const deepPaths = await this.findConfigPaths();
+            for (const p of deepPaths) {
+                if (!vdfPaths.includes(p)) vdfPaths.push(p);
+            }
+
+            if (vdfPaths.length === 0 && !this.foundSteamPath && !this.hasWarnedMissing) {
+                console.warn('[SteamService] Steam not found in standard locations and no libraryfolders.vdf discovered.');
+                this.hasWarnedMissing = true;
+                return [];
+            }
+
+            // Parse ALL found VDFs to find Library Paths
+            for (const vdfFile of vdfPaths) {
+                if (!fs.existsSync(vdfFile)) continue;
+                try {
+                    const content = fs.readFileSync(vdfFile, 'utf-8');
+                    const parsed = vdf.parse(content) as any;
+
+                    // Format 1: libraryfolders { "0": { "path": "..." } }
+                    if (parsed.libraryfolders) {
+                        for (const key in parsed.libraryfolders) {
+                            const entry = parsed.libraryfolders[key];
+                            if (entry && entry.path) {
+                                libraryPaths.add(entry.path);
+                            } else if (typeof entry === 'string') {
+                                // old format?
+                                libraryPaths.add(entry);
+                            }
                         }
                     }
+                } catch (e) {
+                    console.error(`[SteamService] Failed to parse ${vdfFile}`, e);
                 }
-            } catch (e) {
-                console.error(`[SteamService] Failed to parse ${vdfFile}`, e);
             }
-        }
 
-        // Also fallback: Add the parent dir of any found libraryfolders.vdf as a potential library root
-        // (If libraryfolders.vdf is IN steamapps, parent is steamapps, parent-parent is Library Root)
-        for (const vdfFile of vdfPaths) {
-            // /path/to/Library/steamapps/libraryfolders.vdf
-            const steamapps = path.dirname(vdfFile);
-            if (path.basename(steamapps) === 'steamapps') {
-                libraryPaths.add(path.dirname(steamapps));
+            // Also fallback: Add the parent dir of any found libraryfolders.vdf as a potential library root
+            // (If libraryfolders.vdf is IN steamapps, parent is steamapps, parent-parent is Library Root)
+            for (const vdfFile of vdfPaths) {
+                // /path/to/Library/steamapps/libraryfolders.vdf
+                const steamapps = path.dirname(vdfFile);
+                if (path.basename(steamapps) === 'steamapps') {
+                    libraryPaths.add(path.dirname(steamapps));
+                }
             }
         }
 

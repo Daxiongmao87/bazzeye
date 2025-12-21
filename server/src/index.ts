@@ -130,6 +130,19 @@ io.on('connection', (socket) => {
         socket.emit('steam:games', games);
     });
 
+    socket.on('steam:get-library-paths', () => {
+        const paths = configService.getSteamLibraryPaths();
+        socket.emit('steam:library-paths', paths);
+    });
+
+    socket.on('steam:set-library-paths', async (paths: string[]) => {
+        configService.setSteamLibraryPaths(paths);
+        socket.emit('steam:library-paths', paths);
+        // Trigger a rescan with new paths
+        const games = await steamService.getGames();
+        io.emit('steam:games', games);
+    });
+
     // Terminal Events
     socket.on('term:create', ({ id, command, widgetId, name }: { id: string, command: string | null, widgetId?: string, name?: string }) => {
         terminalService.createManagedTerminal(socket, id, command, widgetId || 'terminal', name || 'Terminal');
