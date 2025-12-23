@@ -197,7 +197,10 @@ class SteamService {
 
         for (const lib of Array.from(libraryPaths)) {
             const steamapps = path.join(lib, 'steamapps');
-            if (!fs.existsSync(steamapps)) continue;
+            if (!fs.existsSync(steamapps)) {
+                console.warn(`[SteamService] Skipping configured path: ${lib} - 'steamapps' directory not found at ${steamapps}`);
+                continue;
+            }
 
             const files = fs.readdirSync(steamapps);
             for (const file of files) {

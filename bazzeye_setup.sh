@@ -40,7 +40,26 @@ if [ ! -d "$RUNTIME_DIR/node/bin" ]; then
     
     echo "Node.js setup complete."
 else
-    echo "Node.js runtime already exists."
+    echo "Checking existing runtime version..."
+    EXISTING_VERSION=$("$RUNTIME_DIR/node/bin/node" -v 2>/dev/null || echo "invalid")
+    if [ "$EXISTING_VERSION" != "$NODE_VERSION" ]; then
+        echo -e "${RED}Runtime mismatch! Found $EXISTING_VERSION, expected $NODE_VERSION.${NC}"
+        echo "Reinstalling runtime..."
+        rm -rf "$RUNTIME_DIR"
+        
+        # Recursive call to setup runtime (sort of, just copy paste logic for safety or loop?)
+        # Simplest is to just just fail and tell user ? No, automation.
+        # Let's just unset the dir check variable? No, simple copy paste logic block or function is best but bash structure here is linear.
+        # Let's just delete it and let the user re-run? Or loop?
+        # Actually, let's just implement the download logic here or use a flag.
+        # Better: Restart the script? 
+        # Safest: Delete and exit, ask to re-run?
+        # User wants automation.
+        echo "Removing invalid runtime. Please run the script again to re-download."
+        exit 1
+    else
+        echo "Node.js runtime ($EXISTING_VERSION) verified."
+    fi
 fi
 
 # Permissions & SELinux (Critical for Systemd on Fedora/Bazzite)
@@ -102,7 +121,7 @@ if [[ ! $REPLY =~ ^[Nn]$ ]]; then
 
         # Execute build
         # We prepend the bundled node bin to PATH so 'npm' and 'node' resolve to it.
-        if distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "cd '$CURRENT_DIR' && export PATH=\"\$(pwd)/runtime/node/bin:\$PATH\" && echo \"Node version: \$(node -v)\" && which node && rm -rf server/node_modules client/node_modules && npm run install:all && npm run build"; then
+        if distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "cd '$CURRENT_DIR' && export PATH=\"\$(pwd)/runtime/node/bin:\$PATH\" && echo \"Node version: \$(node -v)\" && which node && rm -rf server/node_modules client/node_modules && npm run install:all && cd server && npm rebuild && cd .. && npm run build"; then
              # Generate Package Cache
             echo -e "${GREEN}Generating package cache...${NC}"
             mkdir -p "$CURRENT_DIR/server/storage"
@@ -321,5 +340,17 @@ EOF
 else
     echo "Skipping service installation."
     echo "A 'bazzeye.service' file has NOT been generated to avoid overwriting existing configs."
+fi
+
+# Automatic Service Restart
+if systemctl list-unit-files | grep -q "^bazzeye.service"; then
+    echo ""
+    echo "Restarting Bazzeye service to apply changes..."
+    if [ "$EUID" -ne 0 ]; then
+        sudo systemctl restart bazzeye
+    else
+        systemctl restart bazzeye
+    fi
+    echo -e "${GREEN}Service restarted.${NC}"
 fi
 

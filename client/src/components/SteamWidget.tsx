@@ -58,6 +58,9 @@ const SteamWidget: React.FC = () => {
     };
 
     const handleAddPath = () => {
+        // Pre-fill with standard Linux Steam path if clean adding?
+        // Actually, let's keep it empty so placeholder shows, but maybe we can make the placeholder dynamic?
+        // or just add empty string as before.
         setEditingPaths([...editingPaths, '']);
     };
 
@@ -181,7 +184,7 @@ const SteamWidget: React.FC = () => {
                                             type="text"
                                             value={path}
                                             onChange={(e) => handlePathChange(index, e.target.value)}
-                                            placeholder="/mnt/games/SteamLibrary"
+                                            placeholder="/home/user/.local/share/Steam"
                                             className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
                                         />
                                         <button
