@@ -124,6 +124,10 @@ const SteamWidget: React.FC = () => {
         newPaths[index] = value;
         setEditingPaths(newPaths);
 
+        // Clear stale suggestions immediately and reset selection
+        setPathSuggestions([]);
+        setActiveSuggestionIndex(-1);
+
         // Debounce requests
         if (debounceRef.current) {
             clearTimeout(debounceRef.current);
@@ -133,8 +137,6 @@ const SteamWidget: React.FC = () => {
             debounceRef.current = setTimeout(() => {
                 requestSuggestions(value);
             }, 300);
-        } else {
-            setPathSuggestions([]);
         }
     };
 
