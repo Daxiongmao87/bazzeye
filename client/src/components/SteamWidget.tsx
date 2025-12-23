@@ -19,6 +19,10 @@ const SteamWidget: React.FC = () => {
     const [libraryPaths, setLibraryPaths] = useState<string[]>([]);
     const [editingPaths, setEditingPaths] = useState<string[]>([]);
 
+    const [pathSuggestions, setPathSuggestions] = useState<any[]>([]);
+    const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+    const [pathInputFocus, setPathInputFocus] = useState<number>(-1);
+
     useEffect(() => {
         if (!socket) return;
 
@@ -38,10 +42,22 @@ const SteamWidget: React.FC = () => {
             setLibraryPaths(paths);
         });
 
+        socket.on('files:list-data', (response: any) => {
+            if (response.success && response.files) {
+                // Filter for directories only and excluding hidden ones if desired?
+                // For now just directories
+                const dirs = response.files.filter((f: any) => f.type === 'directory');
+                setPathSuggestions(dirs);
+            } else {
+                setPathSuggestions([]);
+            }
+        });
+
         return () => {
             socket.off('steam:games');
             socket.off('steam:now-playing');
             socket.off('steam:library-paths');
+            socket.off('files:list-data');
         };
     }, [socket]);
 
@@ -58,9 +74,6 @@ const SteamWidget: React.FC = () => {
     };
 
     const handleAddPath = () => {
-        // Pre-fill with standard Linux Steam path if clean adding?
-        // Actually, let's keep it empty so placeholder shows, but maybe we can make the placeholder dynamic?
-        // or just add empty string as before.
         setEditingPaths([...editingPaths, '']);
     };
 
@@ -68,10 +81,50 @@ const SteamWidget: React.FC = () => {
         setEditingPaths(editingPaths.filter((_, i) => i !== index));
     };
 
+    const requestSuggestions = (inputPath: string) => {
+        if (!socket) return;
+        const dir = inputPath.endsWith('/') ? inputPath : inputPath.substring(0, inputPath.lastIndexOf('/')) || '/';
+        socket.emit('files:list', dir);
+    };
+
     const handlePathChange = (index: number, value: string) => {
         const newPaths = [...editingPaths];
         newPaths[index] = value;
         setEditingPaths(newPaths);
+
+        // Debounce requests? Or simple threshold
+        if (value.includes('/')) {
+            requestSuggestions(value);
+        } else {
+            setPathSuggestions([]);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
+        if (pathSuggestions.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActiveSuggestionIndex(prev => (prev + 1) % pathSuggestions.length);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActiveSuggestionIndex(prev => (prev - 1 + pathSuggestions.length) % pathSuggestions.length);
+        } else if (e.key === 'Tab' || e.key === 'Enter') {
+            if (activeSuggestionIndex >= 0 && pathSuggestions[activeSuggestionIndex]) {
+                e.preventDefault();
+                const selected = pathSuggestions[activeSuggestionIndex];
+                const currentVal = editingPaths[index];
+                // Replace basename with selection
+                const dir = currentVal.endsWith('/') ? currentVal : currentVal.substring(0, currentVal.lastIndexOf('/')) || '/';
+                const newPath = (dir.endsWith('/') ? dir : dir + '/') + selected.name + '/';
+
+                handlePathChange(index, newPath);
+                setActiveSuggestionIndex(-1);
+                // Keep focus to allow typing next segment
+            }
+        } else if (e.key === 'Escape') {
+            setPathSuggestions([]);
+        }
     };
 
     return (
@@ -179,11 +232,14 @@ const SteamWidget: React.FC = () => {
                                 </div>
                             ) : (
                                 editingPaths.map((path, index) => (
-                                    <div key={index} className="flex gap-2">
+                                    <div key={index} className="flex gap-2 relative">
                                         <input
                                             type="text"
                                             value={path}
                                             onChange={(e) => handlePathChange(index, e.target.value)}
+                                            onKeyDown={(e) => handleKeyDown(e, index)}
+                                            onFocus={() => setPathInputFocus(index)}
+                                            onBlur={() => setTimeout(() => setPathInputFocus(-1), 200)}
                                             placeholder="/home/user/.local/share/Steam"
                                             className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
                                         />
@@ -194,6 +250,34 @@ const SteamWidget: React.FC = () => {
                                         >
                                             <X size={18} className="text-red-400" />
                                         </button>
+
+                                        {/* Suggestions Dropdown */}
+                                        {pathInputFocus === index && pathSuggestions.length > 0 && (
+                                            <div className="absolute top-full left-0 right-12 z-10 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                                {pathSuggestions.filter(p => {
+                                                    const currentVal = editingPaths[index];
+                                                    const dir = currentVal.endsWith('/') ? currentVal : currentVal.substring(0, currentVal.lastIndexOf('/')) || '/';
+                                                    const basename = currentVal.replace(dir, '').replace(/^\//, ''); // remove dir prefix
+                                                    return p.name.startsWith(basename);
+                                                }).map((suggestion, i) => (
+                                                    <div
+                                                        key={suggestion.name}
+                                                        className={`px-3 py-2 text-sm cursor-pointer flex items-center gap-2 ${i === activeSuggestionIndex ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault(); // Prevent blur
+                                                            // Apply selection
+                                                            const currentVal = editingPaths[index];
+                                                            const dir = currentVal.endsWith('/') ? currentVal : currentVal.substring(0, currentVal.lastIndexOf('/')) || '/';
+                                                            const newPath = (dir.endsWith('/') ? dir : dir + '/') + suggestion.name + '/';
+                                                            handlePathChange(index, newPath);
+                                                        }}
+                                                    >
+                                                        <FolderOpen size={14} className="text-gray-500" />
+                                                        {suggestion.name}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 ))
                             )}
