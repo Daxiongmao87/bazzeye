@@ -2,7 +2,7 @@
 
 **Bazzeye** is a lightweight, responsive web dashboard designed for Bazzite/Linux handhelds and gaming systems. It provides system monitoring, steam game integration, and administrative controls in a sleek interface.
 
-![Bazzeye Dashboard](client/public/favicon.svg)
+<img width="1080" height="917" alt="image" src="https://github.com/user-attachments/assets/f35e4244-538a-44db-9144-c4f498a8f79e" />
 
 ## Features
 
