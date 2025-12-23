@@ -9,7 +9,7 @@
     "client": "cd client && npm run dev",
     "install:all": "npm install && cd server && npm install && cd .. && cd client && npm install",
     "build": "cd server && npm run build && cd .. && cd client && npm run build",
-    "deploy": "./deploy.sh"
+    "release": "./bazzeye_release.sh"
   },
   "keywords": [],
   "author": "",

@@ -102,7 +102,7 @@ if [[ ! $REPLY =~ ^[Nn]$ ]]; then
 
         # Execute build
         # We prepend the bundled node bin to PATH so 'npm' and 'node' resolve to it.
-        if distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "export PATH=\"$CURRENT_DIR/runtime/node/bin:\$PATH\" && echo \"Node version: \$(node -v)\" && cd '$CURRENT_DIR' && npm run install:all && npm run build"; then
+        if distrobox enter $DBX_FLAGS "$CONTAINER" -- bash -c "cd '$CURRENT_DIR' && export PATH=\"\$(pwd)/runtime/node/bin:\$PATH\" && echo \"Node version: \$(node -v)\" && which node && rm -rf server/node_modules client/node_modules && npm run install:all && npm run build"; then
              # Generate Package Cache
             echo -e "${GREEN}Generating package cache...${NC}"
             mkdir -p "$CURRENT_DIR/server/storage"
@@ -173,7 +173,7 @@ fi
 
 echo -e "${GREEN}Setup Complete!${NC}"
 echo -e "${GREEN}Setup Complete!${NC}"
-echo -e "You can now run the server manually using: ./start_server.sh"
+echo -e "You can now run the server manually using: ./bazzeye_start.sh"
 
 # Service Installation
 echo ""
