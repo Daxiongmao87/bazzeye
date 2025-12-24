@@ -55,7 +55,7 @@ class FileService {
             }
 
             // List entries as owner
-            const cmd = `find '${safePath}' -maxdepth 1 -mindepth 1 -printf "%y|%s|%f\\n"`;
+            const cmd = `find -L '${safePath}' -maxdepth 1 -mindepth 1 -printf "%y|%s|%f\\n"`;
             const output = await ownerService.execAsOwner(cmd);
 
             const files: FileEntry[] = output.trim().split('\n').filter(l => l).map(line => {
@@ -110,7 +110,7 @@ class FileService {
             }
 
             // List entries: type|size|name
-            const cmd = `find '${safePath}' -maxdepth 1 -mindepth 1 -printf "%y|%s|%f\\n"`;
+            const cmd = `find -L '${safePath}' -maxdepth 1 -mindepth 1 -printf "%y|%s|%f\\n"`;
             const output = await authService.execSudo(cmd);
 
             const files: FileEntry[] = output.trim().split('\n').filter(l => l).map(line => {
