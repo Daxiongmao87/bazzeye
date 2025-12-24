@@ -130,6 +130,19 @@ io.on('connection', (socket) => {
         socket.emit('steam:games', games);
     });
 
+    socket.on('steam:get-library-paths', () => {
+        const paths = configService.getSteamLibraryPaths();
+        socket.emit('steam:library-paths', paths);
+    });
+
+    socket.on('steam:set-library-paths', async (paths: string[]) => {
+        configService.setSteamLibraryPaths(paths);
+        socket.emit('steam:library-paths', paths);
+        // Trigger a rescan with new paths
+        const games = await steamService.getGames();
+        io.emit('steam:games', games);
+    });
+
     // Terminal Events
     socket.on('term:create', ({ id, command, widgetId, name }: { id: string, command: string | null, widgetId?: string, name?: string }) => {
         terminalService.createManagedTerminal(socket, id, command, widgetId || 'terminal', name || 'Terminal');
@@ -243,12 +256,17 @@ io.on('connection', (socket) => {
         });
     });
 
-    socket.on('files:list', async (path: string) => {
+    socket.on('files:list', async (payload: string | { path: string, requestId?: number }) => {
+        console.log('[Debug] files:list payload:', JSON.stringify(payload));
+        const pathStr = typeof payload === 'string' ? payload : payload.path;
+        const requestId = typeof payload === 'object' ? payload.requestId : undefined;
+
         // useSudo determines privilege level:
         // false = runs as owner (steam) - can only see owner's files
         // true = runs as root - can see everything
-        const result = await fileService.listFiles(path, authService.isSudo());
-        socket.emit('files:list-data', result);
+        const result = await fileService.listFiles(pathStr, authService.isSudo());
+        console.log('[Debug] files:list sending response with requestId:', requestId);
+        socket.emit('files:list-data', { ...result, requestId });
     });
 
     socket.on('files:delete', async ({ path: filePath }) => {

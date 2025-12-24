@@ -47,7 +47,7 @@ We provide a helper script that spins up a Fedora container, installs dependenci
 
 ### 3. Run Manually (Testing)
 ```bash
-./start_server.sh
+./bazzeye_start.sh
 ```
 Access at `http://localhost:3000` (or your IP).
 
@@ -59,6 +59,38 @@ To run automatically on boot, simply answer **"y"** when the setup script asks:
 
 The script will automatically generate a valid Systemd service file for your specific user/path and install it.
 **Note:** The service runs as your current user, not root. Privileged actions (like reboot) are handled via secure password-less sudo rules configured during setup.
+
+## Updating Bazzeye
+
+To update your installation to the latest version:
+
+### Option A: Automatic Update Script
+We include a helper script to automate the update process:
+
+```bash
+./bazzeye_update.sh
+```
+
+### Option B: Manual Update
+If you prefer to do it manually:
+
+1.  Pull the latest changes:
+    ```bash
+    git pull
+    ```
+2.  Install dependencies:
+    ```bash
+    npm run install:all
+    ```
+3.  Rebuild:
+    ```bash
+    npm run build
+    ```
+4.  Restart the service:
+    ```bash
+    systemctl --user restart bazzeye
+    ```
+
 
 ## Usage
 

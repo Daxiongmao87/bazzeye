@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { ownerService } from './OwnerService';
 
 export interface AlertSettings {
     enabled: boolean;
@@ -12,12 +13,19 @@ export interface TerminalSettings {
     transparent: boolean;
 }
 
+export interface SteamSettings {
+    libraryPaths: string[];
+}
+
 export interface AppConfig {
+    initialized?: boolean;
     alerts: AlertSettings;
     terminal: TerminalSettings;
+    steam: SteamSettings;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
+    initialized: false,
     alerts: {
         enabled: true,
         warningTemp: 80,
@@ -26,6 +34,9 @@ const DEFAULT_CONFIG: AppConfig = {
     },
     terminal: {
         transparent: false
+    },
+    steam: {
+        libraryPaths: []
     }
 };
 
@@ -41,7 +52,23 @@ class ConfigService {
             fs.mkdirSync(dataDir, { recursive: true });
         }
         this.configFile = path.join(dataDir, 'config.json');
+
         this.load();
+
+        if (!this.config.initialized) {
+            // First run: Set default Steam path
+            const ownerHome = ownerService.getOwnerHome();
+            const defaultSteamPath = path.join(ownerHome, '.local/share/Steam');
+            console.log(`[ConfigService] First run detected. Setting default Steam path: ${defaultSteamPath}`);
+
+            // Set defaults
+            const steamConfig = this.config.steam;
+            steamConfig.libraryPaths = [defaultSteamPath];
+
+            this.config.initialized = true;
+            this.config.steam = steamConfig; // Trigger update via setting? No, direct modify then save.
+            this.save();
+        }
     }
 
     public setSocket(io: any) {
@@ -57,7 +84,8 @@ class ConfigService {
                     ...DEFAULT_CONFIG,
                     ...data,
                     alerts: { ...DEFAULT_CONFIG.alerts, ...(data.alerts || {}) },
-                    terminal: { ...DEFAULT_CONFIG.terminal, ...(data.terminal || {}) }
+                    terminal: { ...DEFAULT_CONFIG.terminal, ...(data.terminal || {}) },
+                    steam: { ...DEFAULT_CONFIG.steam, ...(data.steam || {}) }
                 };
             }
         } catch (e) {
@@ -67,6 +95,7 @@ class ConfigService {
 
     private save() {
         try {
+            console.log('[ConfigService] Saving config to:', this.configFile);
             fs.writeFileSync(this.configFile, JSON.stringify(this.config, null, 2));
             if (this.io) {
                 this.io.emit('config:updated', this.startConfig());
@@ -93,6 +122,9 @@ class ConfigService {
         if (updates.terminal) {
             this.config.terminal = { ...this.config.terminal, ...updates.terminal };
         }
+        if (updates.steam) {
+            this.config.steam = { ...this.config.steam, ...updates.steam };
+        }
         this.save();
         return this.config;
     }
@@ -108,6 +140,23 @@ class ConfigService {
         this.save();
         return this.config.terminal;
     }
+
+    public updateSteam(updates: Partial<SteamSettings>) {
+        this.config.steam = { ...this.config.steam, ...updates };
+        this.save();
+        return this.config.steam;
+    }
+
+    public getSteamLibraryPaths(): string[] {
+        return this.config.steam.libraryPaths;
+    }
+
+    public setSteamLibraryPaths(paths: string[]) {
+        this.config.steam.libraryPaths = paths;
+        this.save();
+        return this.config.steam.libraryPaths;
+    }
 }
 
 export const configService = new ConfigService();
+
