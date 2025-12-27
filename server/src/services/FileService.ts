@@ -29,6 +29,12 @@ class FileService {
 
         console.log(`[FileService] listFiles called: path="${requestPath}", useSudo=${useSudo}, targetPath="${targetPath}"`);
 
+        // Check for jail break attempt
+        if (!useSudo && !targetPath.startsWith(this.rootDir)) {
+            console.warn(`[FileService] Access denied: ${targetPath} is outside jail ${this.rootDir}`);
+            return { success: false, error: 'Access Denied: Path outside of home directory' };
+        }
+
         if (useSudo) {
             console.log(`[FileService] Using sudo (root) path for: ${targetPath}`);
             return this.listWithSudo(targetPath);

@@ -15,7 +15,7 @@ app.use(express.json());
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: {
-        origin: "*", // Adjust for production
+        origin: ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"], // Restrict to local dev/prod ports
         methods: ["GET", "POST"]
     }
 });
@@ -59,15 +59,15 @@ io.on('connection', (socket) => {
     console.log('Client connected:', socket.id);
 
     // Send initial state
-    console.log(`[Auth] Client connected, sending initial sudoMode: ${authService.isSudo()}`);
-    socket.emit('auth:status', authService.isSudo());
+    console.log(`[Auth] Client connected, sending initial sudoMode: ${authService.isSudo(socket.id)}`);
+    socket.emit('auth:status', authService.isSudo(socket.id));
     // Check if password setup is needed
-    if (!authService.hasPassword()) {
+    if (!authService.hasDashboardPassword()) {
         socket.emit('auth:needs-setup');
     }
 
     // Check if returning user needs to re-authenticate
-    const sessionCheck = authService.checkSession();
+    const sessionCheck = authService.checkSession(socket.id);
     socket.emit('auth:session-check', sessionCheck);
 
 
@@ -76,21 +76,23 @@ io.on('connection', (socket) => {
 
     // --- Auth Events ---
     socket.on('auth:request-toggle', () => {
-        console.log(`[Auth] Toggle requested, current sudoMode: ${authService.isSudo()}`);
-        const result = authService.requestToggleSudo();
-        console.log(`[Auth] Toggle result:`, result, `new sudoMode: ${authService.isSudo()}`);
+        console.log(`[Auth] Toggle requested, current sudoMode: ${authService.isSudo(socket.id)}`);
+        const result = authService.requestToggleSudo(socket.id);
+        console.log(`[Auth] Toggle result:`, result, `new sudoMode: ${authService.isSudo(socket.id)}`);
         if (result.success) {
-            io.emit('auth:status', authService.isSudo());
+            io.emit('auth:status', authService.isSudo(socket.id)); // Broadcast? No, barely helps. State is per session.
+            // Actually, we should only emit to THIS socket if session based.
+            socket.emit('auth:status', authService.isSudo(socket.id));
         } else if (result.requiresPassword) {
             socket.emit('auth:require-password');
         }
     });
 
     socket.on('auth:verify-password', async (password: string) => {
-        const isValid = await authService.verifyPassword(password);
+        const isValid = await authService.verifySudoPassword(password);
         if (isValid) {
-            authService.setSudo(true);
-            io.emit('auth:status', true);
+            authService.setSudo(socket.id, true);
+            socket.emit('auth:status', true);
             socket.emit('auth:verify-success');
         } else {
             socket.emit('auth:verify-fail');
@@ -99,16 +101,17 @@ io.on('connection', (socket) => {
 
     socket.on('auth:set-password', async ({ password, oldPassword }: any) => {
         // If setting initial password, oldPassword not needed if hasPassword() is false
-        if (authService.hasPassword()) {
-            const isValid = await authService.verifyPassword(oldPassword);
+        if (authService.hasDashboardPassword()) {
+            // Use login to verify old dashboard password
+            const isValid = await authService.login(socket.id, oldPassword);
             if (!isValid) {
                 socket.emit('auth:set-password-error', 'Invalid old password');
                 return;
             }
         }
-        await authService.setPassword(password); // pass null/empty to remove
+        await authService.setDashboardPassword(password); // pass null/empty to remove
         socket.emit('auth:set-password-success');
-        if (!authService.hasPassword()) {
+        if (!authService.hasDashboardPassword()) {
             socket.emit('auth:needs-setup'); // Technically going back to setup state? Or just insecure.
         }
     });
@@ -145,6 +148,10 @@ io.on('connection', (socket) => {
 
     // Terminal Events
     socket.on('term:create', ({ id, command, widgetId, name }: { id: string, command: string | null, widgetId?: string, name?: string }) => {
+        if (!authService.isSudo(socket.id)) {
+            console.warn(`[Security] Unauthorized term:create attempt from ${socket.id}`);
+            return;
+        }
         terminalService.createManagedTerminal(socket, id, command, widgetId || 'terminal', name || 'Terminal');
     });
 
@@ -172,7 +179,7 @@ io.on('connection', (socket) => {
 
     // System Control Events
     socket.on('system:control', async ({ action }) => {
-        if (!authService.isSudo()) return;
+        if (!authService.isSudo(socket.id)) return;
         if (action === 'reboot') await systemControlService.reboot();
         if (action === 'shutdown') await systemControlService.shutdown();
         if (action === 'update') {
@@ -217,7 +224,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('cleaner:set-schedule', ({ enabled, intervalHours }: { enabled: boolean, intervalHours: number }) => {
-        if (!authService.isSudo()) return;
+        if (!authService.isSudo(socket.id)) return;
         const schedule = cleanerScheduleService.setSchedule(enabled, intervalHours);
         io.emit('cleaner:schedule-status', schedule);
     });
@@ -228,7 +235,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('config:update-alerts', (updates: any) => {
-        if (!authService.isSudo()) return;
+        if (!authService.isSudo(socket.id)) return;
         const newConfig = configService.updateAlerts(updates);
         // Emitted via service save() -> config:updated or can emit specific here
         io.emit('config:alerts-updated', newConfig);
@@ -260,12 +267,12 @@ io.on('connection', (socket) => {
         // useSudo determines privilege level:
         // false = runs as owner (steam) - can only see owner's files
         // true = runs as root - can see everything
-        const result = await fileService.listFiles(path, authService.isSudo());
+        const result = await fileService.listFiles(path, authService.isSudo(socket.id));
         socket.emit('files:list-data', result);
     });
 
     socket.on('files:delete', async ({ path: filePath }) => {
-        if (!authService.isSudo()) return;
+        if (!authService.isSudo(socket.id)) return;
         const result = await fileService.deleteFile(filePath, true);
         // Refresh the parent folder
         const parentDir = path.dirname(filePath);
@@ -274,7 +281,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('files:create-folder', async ({ path: folderPath }) => {
-        if (!authService.isSudo()) return; // Optional check
+        if (!authService.isSudo(socket.id)) return; // Optional check
         await fileService.createFolder(folderPath, true);
         // Refresh parent
         const parentDir = path.dirname(folderPath);
@@ -285,7 +292,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('files:create-file', async ({ path: filePath }) => {
-        if (!authService.isSudo()) return;
+        if (!authService.isSudo(socket.id)) return;
         await fileService.createFile(filePath, true);
         const parentDir = path.dirname(filePath);
         const result = await fileService.listFiles(parentDir, true);
@@ -320,7 +327,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('package:install', async (pkg: string) => {
-        if (!authService.isSudo()) return;
+        if (!authService.isSudo(socket.id)) return;
         socket.emit('package:status', { pkg, status: 'installing' });
         try {
             await packageService.install(pkg);
@@ -334,7 +341,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('package:uninstall', async (pkg: string) => {
-        if (!authService.isSudo()) return;
+        if (!authService.isSudo(socket.id)) return;
         socket.emit('package:status', { pkg, status: 'uninstalling' });
         try {
             await packageService.uninstall(pkg);
@@ -349,6 +356,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
+        authService.removeSession(socket.id);
     });
 });
 
