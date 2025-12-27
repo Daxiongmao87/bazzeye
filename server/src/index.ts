@@ -88,6 +88,19 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('auth:login', async (password: string) => {
+        const success = await authService.login(socket.id, password);
+        if (success) {
+            socket.emit('auth:login-success');
+            // Send initial state again now that we are authed
+            socket.emit('auth:status', authService.isSudo(socket.id));
+            // Also send history? No, client should request it.
+            // But monitorService sends loop.
+        } else {
+            socket.emit('auth:login-fail');
+        }
+    });
+
     socket.on('auth:verify-password', async (password: string) => {
         const isValid = await authService.verifySudoPassword(password);
         if (isValid) {
