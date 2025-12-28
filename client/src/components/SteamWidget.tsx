@@ -26,7 +26,7 @@ const SteamWidget: React.FC = () => {
     const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
 
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-    const debounceRef = useRef<NodeJS.Timeout | null>(null);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingPathRef = useRef<string>('');
 
     useEffect(() => {
