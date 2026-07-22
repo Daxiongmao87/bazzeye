@@ -138,9 +138,6 @@ const Dashboard: React.FC = () => {
     useEffect(() => {
         if (!socket) return;
 
-        // Request initial data
-        socket.emit('layout:get');
-
         socket.on('layout:data', (data: { layouts: any, extras: string[], disabledCards?: string[] }) => {
             if (data && data.layouts) {
                 // Merge/Migrate if needed, but for now trust backend
@@ -209,6 +206,9 @@ const Dashboard: React.FC = () => {
         socket.on('auth:set-password-error', (msg: string) => {
             setAuthError(msg);
         });
+
+        // Request initial data only after listeners are ready for the response.
+        socket.emit('layout:get');
 
         return () => {
             socket.off('layout:data');
