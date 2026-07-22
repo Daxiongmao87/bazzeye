@@ -224,13 +224,25 @@ const Dashboard: React.FC = () => {
     }, [socket]);
 
     const onLayoutChange = (_currentLayout: RGL_Layout, allLayouts: any) => {
-        layoutsRef.current = allLayouts;
-        setLayouts(allLayouts);
+        const mergeDisabledItems = (layout: RGL_Layout, previousLayout: RGL_Layout) => [
+            ...layout,
+            ...previousLayout.filter(item =>
+                disabledCardsRef.current.includes(item.i) && !layout.some(nextItem => nextItem.i === item.i)
+            )
+        ];
+        const nextLayouts = {
+            lg: mergeDisabledItems(allLayouts.lg, layoutsRef.current.lg),
+            md: mergeDisabledItems(allLayouts.md, layoutsRef.current.md),
+            sm: mergeDisabledItems(allLayouts.sm, layoutsRef.current.sm)
+        };
+
+        layoutsRef.current = nextLayouts;
+        setLayouts(nextLayouts);
         // Don't save until initial data is loaded from server
         if (!layoutLoaded) return;
         // Save to backend - use refs to avoid stale callback state
         socket?.emit('layout:save', {
-            layouts: allLayouts,
+            layouts: nextLayouts,
             extras: extraTerminalsRef.current,
             disabledCards: disabledCardsRef.current
         });
