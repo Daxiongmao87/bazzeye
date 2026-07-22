@@ -144,25 +144,38 @@ const Dashboard: React.FC = () => {
         socket.on('layout:data', (data: { layouts: any, extras: string[], disabledCards?: string[] }) => {
             if (data && data.layouts) {
                 // Merge/Migrate if needed, but for now trust backend
-                setLayouts({
+                const nextLayouts = {
                     lg: migrateLayout(data.layouts.lg || []),
                     md: migrateLayout(data.layouts.md || []),
                     sm: migrateLayout(data.layouts.sm || [])
-                });
+                };
+                layoutsRef.current = nextLayouts;
+                setLayouts(nextLayouts);
             }
             if (data && data.extras) {
+                extraTerminalsRef.current = data.extras;
                 setExtraTerminals(data.extras);
             }
-            setDisabledCards(data?.disabledCards || []);
+            const nextDisabledCards = data?.disabledCards || [];
+            disabledCardsRef.current = nextDisabledCards;
+            setDisabledCards(nextDisabledCards);
             // Mark as loaded - now safe to save
             setLayoutLoaded(true);
         });
 
         socket.on('layout:updated', (data: { layouts: any, extras: string[], disabledCards?: string[] }) => {
             // Received update from another client
-            if (data && data.layouts) setLayouts(data.layouts);
-            if (data && data.extras) setExtraTerminals(data.extras);
-            setDisabledCards(data?.disabledCards || []);
+            if (data && data.layouts) {
+                layoutsRef.current = data.layouts;
+                setLayouts(data.layouts);
+            }
+            if (data && data.extras) {
+                extraTerminalsRef.current = data.extras;
+                setExtraTerminals(data.extras);
+            }
+            const nextDisabledCards = data?.disabledCards || [];
+            disabledCardsRef.current = nextDisabledCards;
+            setDisabledCards(nextDisabledCards);
         });
 
         // Auth Events
@@ -211,6 +224,7 @@ const Dashboard: React.FC = () => {
     }, [socket]);
 
     const onLayoutChange = (_currentLayout: RGL_Layout, allLayouts: any) => {
+        layoutsRef.current = allLayouts;
         setLayouts(allLayouts);
         // Don't save until initial data is loaded from server
         if (!layoutLoaded) return;
@@ -280,6 +294,7 @@ const Dashboard: React.FC = () => {
 
     const disableCard = (id: string) => {
         const nextDisabledCards = [...disabledCardsRef.current, id];
+        disabledCardsRef.current = nextDisabledCards;
         setDisabledCards(nextDisabledCards);
         socket?.emit('layout:save', {
             layouts: layoutsRef.current,
@@ -290,6 +305,7 @@ const Dashboard: React.FC = () => {
 
     const enableCard = (id: string) => {
         const nextDisabledCards = disabledCardsRef.current.filter(cardId => cardId !== id);
+        disabledCardsRef.current = nextDisabledCards;
         const defaultItem = defaultLayout.find(item => item.i === id);
         const ensureItem = (layout: RGL_Layout) => (
             defaultItem && !layout.some(item => item.i === id) ? [...layout, { ...defaultItem }] : layout
@@ -300,6 +316,7 @@ const Dashboard: React.FC = () => {
             sm: ensureItem(layoutsRef.current.sm)
         };
 
+        layoutsRef.current = nextLayouts;
         setDisabledCards(nextDisabledCards);
         setLayouts(nextLayouts);
         socket?.emit('layout:save', {
@@ -352,8 +369,9 @@ const Dashboard: React.FC = () => {
                     )}
                     <button
                         onClick={toggleLayoutLock}
-                        className={`p-2 rounded-full border transition-all ${isDraggable ? 'bg-blue-600 border-blue-400 text-white rotate-180' : 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-400'}`}
-                        title={isDraggable ? "Lock Layout" : "Edit Layout"}
+                        disabled={!layoutLoaded}
+                        className={`p-2 rounded-full border transition-all ${isDraggable ? 'bg-blue-600 border-blue-400 text-white rotate-180' : 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-400'} ${!layoutLoaded ? 'cursor-not-allowed opacity-50' : ''}`}
+                        title={!layoutLoaded ? "Loading Layout" : isDraggable ? "Lock Layout" : "Edit Layout"}
                     >
                         <Settings size={20} />
                     </button>
