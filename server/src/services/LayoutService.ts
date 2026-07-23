@@ -35,12 +35,14 @@ class LayoutService {
         return { layouts: this.layouts, extras: this.extras, disabledCards: this.disabledCards };
     }
 
-    public saveLayout(layouts: any, extras: string[], disabledCards: string[] = []) {
+    public saveLayout(layouts: any, extras: string[], disabledCards?: string[]) {
         this.layouts = layouts;
         this.extras = extras;
-        this.disabledCards = disabledCards;
+        if (disabledCards !== undefined) {
+            this.disabledCards = disabledCards;
+        }
         try {
-            fs.writeFileSync(this.layoutFile, JSON.stringify({ layouts, extras, disabledCards }, null, 2));
+            fs.writeFileSync(this.layoutFile, JSON.stringify(this.getLayout(), null, 2));
             return true;
         } catch (e) {
             console.error('Failed to save layout:', e);
