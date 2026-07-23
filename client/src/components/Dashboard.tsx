@@ -76,21 +76,40 @@ const Dashboard: React.FC = () => {
         });
     };
 
+    const builtInCards = [
+        { id: 'info', label: 'System Information' },
+        { id: 'cpu', label: 'CPU & Memory' },
+        { id: 'storage', label: 'Storage' },
+        { id: 'smart', label: 'SMART Health' },
+        { id: 'steam', label: 'Steam' },
+        { id: 'terminal', label: 'Terminal' },
+        { id: 'cleaner', label: 'Cleaner' },
+        { id: 'packages', label: 'Packages' },
+        { id: 'controls', label: 'System Controls' },
+        { id: 'files', label: 'File Browser' }
+    ];
+
     // Lazy load state to prevent layout jump on mount
     const [layouts, setLayouts] = useState<{ lg: RGL_Layout, md: RGL_Layout, sm: RGL_Layout }>({ lg: defaultLayout, md: defaultLayout, sm: defaultLayout });
     const [extraTerminals, setExtraTerminals] = useState<string[]>([]);
+    const [disabledCards, setDisabledCards] = useState<string[]>([]);
 
     // Flag to prevent saving until server data is loaded
     const [layoutLoaded, setLayoutLoaded] = useState(false);
 
     // Refs to track current values for callbacks (avoids stale closure)
     const extraTerminalsRef = useRef<string[]>([]);
+    const disabledCardsRef = useRef<string[]>([]);
     const layoutsRef = useRef(layouts);
 
     // Keep refs in sync with state
     useEffect(() => {
         extraTerminalsRef.current = extraTerminals;
     }, [extraTerminals]);
+
+    useEffect(() => {
+        disabledCardsRef.current = disabledCards;
+    }, [disabledCards]);
 
     useEffect(() => {
         layoutsRef.current = layouts;
@@ -119,29 +138,41 @@ const Dashboard: React.FC = () => {
     useEffect(() => {
         if (!socket) return;
 
-        // Request initial data
-        socket.emit('layout:get');
-
-        socket.on('layout:data', (data: { layouts: any, extras: string[] }) => {
+        socket.on('layout:data', (data: { layouts: any, extras: string[], disabledCards?: string[] }) => {
             if (data && data.layouts) {
                 // Merge/Migrate if needed, but for now trust backend
-                setLayouts({
+                const nextLayouts = {
                     lg: migrateLayout(data.layouts.lg || []),
                     md: migrateLayout(data.layouts.md || []),
                     sm: migrateLayout(data.layouts.sm || [])
-                });
+                };
+                layoutsRef.current = nextLayouts;
+                setLayouts(nextLayouts);
             }
             if (data && data.extras) {
+                extraTerminalsRef.current = data.extras;
                 setExtraTerminals(data.extras);
             }
+            const nextDisabledCards = data?.disabledCards || [];
+            disabledCardsRef.current = nextDisabledCards;
+            setDisabledCards(nextDisabledCards);
             // Mark as loaded - now safe to save
             setLayoutLoaded(true);
         });
 
-        socket.on('layout:updated', (data: { layouts: any, extras: string[] }) => {
+        socket.on('layout:updated', (data: { layouts: any, extras: string[], disabledCards?: string[] }) => {
             // Received update from another client
-            if (data && data.layouts) setLayouts(data.layouts);
-            if (data && data.extras) setExtraTerminals(data.extras);
+            if (data && data.layouts) {
+                layoutsRef.current = data.layouts;
+                setLayouts(data.layouts);
+            }
+            if (data && data.extras) {
+                extraTerminalsRef.current = data.extras;
+                setExtraTerminals(data.extras);
+            }
+            const nextDisabledCards = data?.disabledCards || [];
+            disabledCardsRef.current = nextDisabledCards;
+            setDisabledCards(nextDisabledCards);
         });
 
         // Auth Events
@@ -176,6 +207,9 @@ const Dashboard: React.FC = () => {
             setAuthError(msg);
         });
 
+        // Request initial data only after listeners are ready for the response.
+        socket.emit('layout:get');
+
         return () => {
             socket.off('layout:data');
             socket.off('layout:updated');
@@ -190,11 +224,28 @@ const Dashboard: React.FC = () => {
     }, [socket]);
 
     const onLayoutChange = (_currentLayout: RGL_Layout, allLayouts: any) => {
-        setLayouts(allLayouts);
+        const mergeDisabledItems = (layout: RGL_Layout, previousLayout: RGL_Layout) => [
+            ...layout,
+            ...previousLayout.filter(item =>
+                disabledCardsRef.current.includes(item.i) && !layout.some(nextItem => nextItem.i === item.i)
+            )
+        ];
+        const nextLayouts = {
+            lg: mergeDisabledItems(allLayouts.lg, layoutsRef.current.lg),
+            md: mergeDisabledItems(allLayouts.md, layoutsRef.current.md),
+            sm: mergeDisabledItems(allLayouts.sm, layoutsRef.current.sm)
+        };
+
+        layoutsRef.current = nextLayouts;
+        setLayouts(nextLayouts);
         // Don't save until initial data is loaded from server
         if (!layoutLoaded) return;
-        // Save to backend - use ref to get current extras value
-        socket?.emit('layout:save', { layouts: allLayouts, extras: extraTerminalsRef.current });
+        // Save to backend - use refs to avoid stale callback state
+        socket?.emit('layout:save', {
+            layouts: nextLayouts,
+            extras: extraTerminalsRef.current,
+            disabledCards: disabledCardsRef.current
+        });
     };
 
     const toggleLayoutLock = () => {
@@ -203,7 +254,11 @@ const Dashboard: React.FC = () => {
 
         // Save layout when EXITING edit mode - use refs for current values
         if (wasEditing) {
-            socket?.emit('layout:save', { layouts: layoutsRef.current, extras: extraTerminalsRef.current });
+            socket?.emit('layout:save', {
+                layouts: layoutsRef.current,
+                extras: extraTerminalsRef.current,
+                disabledCards: disabledCardsRef.current
+            });
         }
     };
 
@@ -218,11 +273,13 @@ const Dashboard: React.FC = () => {
         };
         setLayouts(nextLayouts);
 
-        socket?.emit('layout:save', { layouts: nextLayouts, extras: nextExtras });
+        socket?.emit('layout:save', {
+            layouts: nextLayouts,
+            extras: nextExtras,
+            disabledCards: disabledCardsRef.current
+        });
 
-        // Also tell server to stop that terminal process if we tracked it?
-        // Actually terminal service persists configs, we should remove them there too?
-        // Yes, let's remove the widget config
+        // Also remove the saved terminal configuration and stop its process.
         socket?.emit('term:remove', { id });
     };
 
@@ -240,18 +297,55 @@ const Dashboard: React.FC = () => {
         };
         setLayouts(nextLayouts);
 
-        socket?.emit('layout:save', { layouts: nextLayouts, extras: nextExtras });
+        socket?.emit('layout:save', {
+            layouts: nextLayouts,
+            extras: nextExtras,
+            disabledCards: disabledCardsRef.current
+        });
+    };
+
+    const disableCard = (id: string) => {
+        const nextDisabledCards = [...disabledCardsRef.current, id];
+        disabledCardsRef.current = nextDisabledCards;
+        setDisabledCards(nextDisabledCards);
+        socket?.emit('layout:save', {
+            layouts: layoutsRef.current,
+            extras: extraTerminalsRef.current,
+            disabledCards: nextDisabledCards
+        });
+    };
+
+    const enableCard = (id: string) => {
+        const nextDisabledCards = disabledCardsRef.current.filter(cardId => cardId !== id);
+        disabledCardsRef.current = nextDisabledCards;
+        const defaultItem = defaultLayout.find(item => item.i === id);
+        const ensureItem = (layout: RGL_Layout) => (
+            defaultItem && !layout.some(item => item.i === id) ? [...layout, { ...defaultItem }] : layout
+        );
+        const nextLayouts = {
+            lg: ensureItem(layoutsRef.current.lg),
+            md: ensureItem(layoutsRef.current.md),
+            sm: ensureItem(layoutsRef.current.sm)
+        };
+
+        layoutsRef.current = nextLayouts;
+        setDisabledCards(nextDisabledCards);
+        setLayouts(nextLayouts);
+        socket?.emit('layout:save', {
+            layouts: nextLayouts,
+            extras: extraTerminalsRef.current,
+            disabledCards: nextDisabledCards
+        });
     };
 
     // Cast Responsive to any to avoid strict prop typing issues with isDraggable in some versions
     const ResponsiveGrid = Responsive as any;
 
-    // Dynamically enforce static property based on isDraggable state
-    // This ensures that even if local storage has 'static: false', we override it when locked.
+    // Hidden cards retain their stored positions while being omitted from the active grid.
     const activeLayouts = {
-        lg: layouts.lg.map(i => ({ ...i, static: !isDraggable })),
-        md: layouts.md.map(i => ({ ...i, static: !isDraggable })),
-        sm: layouts.sm.map(i => ({ ...i, static: !isDraggable }))
+        lg: layouts.lg.filter(i => !disabledCards.includes(i.i)).map(i => ({ ...i, static: !isDraggable })),
+        md: layouts.md.filter(i => !disabledCards.includes(i.i)).map(i => ({ ...i, static: !isDraggable })),
+        sm: layouts.sm.filter(i => !disabledCards.includes(i.i)).map(i => ({ ...i, static: !isDraggable }))
     };
 
     return (
@@ -270,12 +364,26 @@ const Dashboard: React.FC = () => {
                             <button onClick={addTerminalWidget} className="bg-green-700 hover:bg-green-600 px-3 py-1 rounded border border-green-500 text-sm flex items-center gap-1">
                                 <Plus size={16} /> Add Terminal Card
                             </button>
+                            {disabledCards.length > 0 && (
+                                <select
+                                    aria-label="Enable card"
+                                    value=""
+                                    onChange={(event) => enableCard(event.target.value)}
+                                    className="bg-gray-800 border border-gray-700 rounded px-3 py-1 text-sm text-gray-200"
+                                >
+                                    <option value="" disabled>Enable Card...</option>
+                                    {builtInCards
+                                        .filter(card => disabledCards.includes(card.id))
+                                        .map(card => <option key={card.id} value={card.id}>{card.label}</option>)}
+                                </select>
+                            )}
                         </>
                     )}
                     <button
                         onClick={toggleLayoutLock}
-                        className={`p-2 rounded-full border transition-all ${isDraggable ? 'bg-blue-600 border-blue-400 text-white rotate-180' : 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-400'}`}
-                        title={isDraggable ? "Lock Layout" : "Edit Layout"}
+                        disabled={!layoutLoaded}
+                        className={`p-2 rounded-full border transition-all ${isDraggable ? 'bg-blue-600 border-blue-400 text-white rotate-180' : 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-400'} ${!layoutLoaded ? 'cursor-not-allowed opacity-50' : ''}`}
+                        title={!layoutLoaded ? "Loading Layout" : isDraggable ? "Lock Layout" : "Edit Layout"}
                     >
                         <Settings size={20} />
                     </button>
@@ -303,43 +411,66 @@ const Dashboard: React.FC = () => {
                             containerPadding={[24, 24]}
                             useCSSTransforms={width > 0}
                         >
-                            <div key="info" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <SystemInfoWidget />
-                            </div>
+                            {!disabledCards.includes('info') && (
+                                <div key="info" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('info')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable System Information card"><X size={12} /></button>}
+                                    <SystemInfoWidget />
+                                </div>
+                            )}
 
-                            <div key="cpu" className="bg-gray-800/80 rounded-xl border border-gray-700 overflow-hidden backdrop-blur-sm shadow-xl">
-                                <CpuWidget />
-                            </div>
-                            <div key="storage" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <StorageWidget />
-                            </div>
-                            <div key="smart" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <SmartWidget />
-                            </div>
+                            {!disabledCards.includes('cpu') && (
+                                <div key="cpu" className="bg-gray-800/80 rounded-xl border border-gray-700 overflow-hidden backdrop-blur-sm shadow-xl relative group">
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('cpu')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable CPU & Memory card"><X size={12} /></button>}
+                                    <CpuWidget />
+                                </div>
+                            )}
+                            {!disabledCards.includes('storage') && (
+                                <div key="storage" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('storage')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable Storage card"><X size={12} /></button>}
+                                    <StorageWidget />
+                                </div>
+                            )}
+                            {!disabledCards.includes('smart') && (
+                                <div key="smart" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('smart')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable SMART Health card"><X size={12} /></button>}
+                                    <SmartWidget />
+                                </div>
+                            )}
 
-                            <div key="steam" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <SteamWidget />
-                            </div>
+                            {!disabledCards.includes('steam') && (
+                                <div key="steam" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('steam')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable Steam card"><X size={12} /></button>}
+                                    <SteamWidget />
+                                </div>
+                            )}
 
-                            <div key="terminal" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <TerminalWidget widgetId="terminal" isEditing={isDraggable} />
-                            </div>
+                            {!disabledCards.includes('terminal') && (
+                                <div key="terminal" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('terminal')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable Terminal card"><X size={12} /></button>}
+                                    <TerminalWidget widgetId="terminal" isEditing={isDraggable} />
+                                </div>
+                            )}
 
-                            {/* Cleaner Widget */}
-                            <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <CleanerWidget />
-                            </div>
+                            {!disabledCards.includes('cleaner') && (
+                                <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('cleaner')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable Cleaner card"><X size={12} /></button>}
+                                    <CleanerWidget />
+                                </div>
+                            )}
 
-                            <div key="packages" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <PackageWidget />
-                            </div>
+                            {!disabledCards.includes('packages') && (
+                                <div key="packages" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('packages')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable Packages card"><X size={12} /></button>}
+                                    <PackageWidget />
+                                </div>
+                            )}
 
                             {extraTerminals.map(id => (
                                 <div key={id} className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
                                     {isDraggable && (
                                         <button
                                             onClick={() => removeTerminalWidget(id)}
-                                            className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
                                             title="Remove Widget"
                                         >
                                             <X size={12} />
@@ -349,13 +480,19 @@ const Dashboard: React.FC = () => {
                                 </div>
                             ))}
 
-                            <div key="controls" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <SystemControlWidget />
-                            </div>
+                            {!disabledCards.includes('controls') && (
+                                <div key="controls" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('controls')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable System Controls card"><X size={12} /></button>}
+                                    <SystemControlWidget />
+                                </div>
+                            )}
 
-                            <div key="files" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <FileBrowserWidget />
-                            </div>
+                            {!disabledCards.includes('files') && (
+                                <div key="files" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('files')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable File Browser card"><X size={12} /></button>}
+                                    <FileBrowserWidget />
+                                </div>
+                            )}
                         </ResponsiveGrid>
                     )}
                 </div>
