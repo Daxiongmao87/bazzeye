@@ -285,19 +285,43 @@ const Dashboard: React.FC = () => {
     ];
 
     const toggleCard = (id: string) => {
-        if (!layoutLoaded) return;
+        if (!layoutLoaded || !socket) return;
 
-        const nextDisabledCards = disabledCards.includes(id)
-            ? disabledCards.filter(cardId => cardId !== id)
-            : [...disabledCards, id];
-        // Update the ref synchronously so ResponsiveGrid's immediate onLayoutChange
-        // cannot persist and broadcast the previous visibility state.
+        const previousDisabledCards = disabledCardsRef.current;
+        const nextDisabledCards = previousDisabledCards.includes(id)
+            ? previousDisabledCards.filter(cardId => cardId !== id)
+            : [...previousDisabledCards, id];
+
+        // Update optimistically, but wait for the server acknowledgement before treating
+        // the change as durable. The identity check prevents a late response from
+        // overwriting a newer local or peer update.
         disabledCardsRef.current = nextDisabledCards;
         setDisabledCards(nextDisabledCards);
-        socket?.emit('layout:save', {
+        socket.timeout(5000).emit('layout:save', {
             layouts: layoutsRef.current,
             extras: extraTerminalsRef.current,
             disabledCards: nextDisabledCards
+        }, (error: Error | null, response?: { success: boolean; layout?: { layouts: any; extras: string[]; disabledCards?: string[] } }) => {
+            if (disabledCardsRef.current !== nextDisabledCards) return;
+
+            if (error || !response?.success || !response.layout) {
+                disabledCardsRef.current = previousDisabledCards;
+                setDisabledCards(previousDisabledCards);
+                return;
+            }
+
+            const savedLayout = response.layout;
+            if (savedLayout.layouts) {
+                layoutsRef.current = savedLayout.layouts;
+                setLayouts(savedLayout.layouts);
+            }
+            if (savedLayout.extras) {
+                extraTerminalsRef.current = savedLayout.extras;
+                setExtraTerminals(savedLayout.extras);
+            }
+            const savedDisabledCards = savedLayout.disabledCards || [];
+            disabledCardsRef.current = savedDisabledCards;
+            setDisabledCards(savedDisabledCards);
         });
     };
 

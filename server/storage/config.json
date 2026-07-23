@@ -1,0 +1,17 @@
+{
+  "initialized": true,
+  "alerts": {
+    "enabled": true,
+    "warningTemp": 80,
+    "criticalTemp": 95,
+    "sustainedSeconds": 60
+  },
+  "terminal": {
+    "transparent": false
+  },
+  "steam": {
+    "libraryPaths": [
+      "/home/root/.local/share/Steam"
+    ]
+  }
+}
