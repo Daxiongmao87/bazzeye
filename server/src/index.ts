@@ -118,11 +118,17 @@ io.on('connection', (socket) => {
         socket.emit('layout:data', layoutService.getLayout());
     });
 
-    socket.on('layout:save', ({ layouts, extras }: any) => {
+    socket.on('layout:save', ({ layouts, extras, disabledCards }: any, acknowledge?: (response: any) => void) => {
         console.log('[Layout] Saving layouts, extras:', extras);
-        layoutService.saveLayout(layouts, extras);
-        // Broadcast to other clients?
-        socket.broadcast.emit('layout:updated', { layouts, extras });
+        const saved = layoutService.saveLayout(layouts, extras, disabledCards);
+        if (!saved) {
+            acknowledge?.({ success: false });
+            return;
+        }
+
+        const savedLayout = layoutService.getLayout();
+        socket.broadcast.emit('layout:updated', savedLayout);
+        acknowledge?.({ success: true, layout: savedLayout });
     });
 
     socket.on('steam:request-games', async () => {

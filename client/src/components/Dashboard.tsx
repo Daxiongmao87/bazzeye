@@ -79,18 +79,25 @@ const Dashboard: React.FC = () => {
     // Lazy load state to prevent layout jump on mount
     const [layouts, setLayouts] = useState<{ lg: RGL_Layout, md: RGL_Layout, sm: RGL_Layout }>({ lg: defaultLayout, md: defaultLayout, sm: defaultLayout });
     const [extraTerminals, setExtraTerminals] = useState<string[]>([]);
+    const [disabledCards, setDisabledCards] = useState<string[]>([]);
 
     // Flag to prevent saving until server data is loaded
     const [layoutLoaded, setLayoutLoaded] = useState(false);
 
     // Refs to track current values for callbacks (avoids stale closure)
     const extraTerminalsRef = useRef<string[]>([]);
+    const disabledCardsRef = useRef<string[]>([]);
+    const cardVisibilitySavePendingRef = useRef(false);
     const layoutsRef = useRef(layouts);
 
     // Keep refs in sync with state
     useEffect(() => {
         extraTerminalsRef.current = extraTerminals;
     }, [extraTerminals]);
+
+    useEffect(() => {
+        disabledCardsRef.current = disabledCards;
+    }, [disabledCards]);
 
     useEffect(() => {
         layoutsRef.current = layouts;
@@ -122,26 +129,40 @@ const Dashboard: React.FC = () => {
         // Request initial data
         socket.emit('layout:get');
 
-        socket.on('layout:data', (data: { layouts: any, extras: string[] }) => {
+        socket.on('layout:data', (data: { layouts: any, extras: string[], disabledCards?: string[] }) => {
             if (data && data.layouts) {
-                // Merge/Migrate if needed, but for now trust backend
-                setLayouts({
+                const nextLayouts = {
                     lg: migrateLayout(data.layouts.lg || []),
                     md: migrateLayout(data.layouts.md || []),
                     sm: migrateLayout(data.layouts.sm || [])
-                });
+                };
+                layoutsRef.current = nextLayouts;
+                setLayouts(nextLayouts);
             }
             if (data && data.extras) {
+                extraTerminalsRef.current = data.extras;
                 setExtraTerminals(data.extras);
             }
+            const nextDisabledCards = data?.disabledCards || [];
+            disabledCardsRef.current = nextDisabledCards;
+            setDisabledCards(nextDisabledCards);
             // Mark as loaded - now safe to save
             setLayoutLoaded(true);
         });
 
-        socket.on('layout:updated', (data: { layouts: any, extras: string[] }) => {
-            // Received update from another client
-            if (data && data.layouts) setLayouts(data.layouts);
-            if (data && data.extras) setExtraTerminals(data.extras);
+        socket.on('layout:updated', (data: { layouts: any, extras: string[], disabledCards?: string[] }) => {
+            // Update refs before state so grid reconciliation cannot re-save stale visibility.
+            if (data && data.layouts) {
+                layoutsRef.current = data.layouts;
+                setLayouts(data.layouts);
+            }
+            if (data && data.extras) {
+                extraTerminalsRef.current = data.extras;
+                setExtraTerminals(data.extras);
+            }
+            const nextDisabledCards = data?.disabledCards || [];
+            disabledCardsRef.current = nextDisabledCards;
+            setDisabledCards(nextDisabledCards);
         });
 
         // Auth Events
@@ -190,11 +211,19 @@ const Dashboard: React.FC = () => {
     }, [socket]);
 
     const onLayoutChange = (_currentLayout: RGL_Layout, allLayouts: any) => {
-        setLayouts(allLayouts);
+        if (cardVisibilitySavePendingRef.current) return;
+
+        // Every card remains represented in the grid, including invisible placeholders for
+        // disabled cards, so react-grid-layout returns a complete collision-free layout.
+        const nextLayouts = {
+            lg: allLayouts.lg || layoutsRef.current.lg,
+            md: allLayouts.md || layoutsRef.current.md,
+            sm: allLayouts.sm || layoutsRef.current.sm
+        };
+        setLayouts(nextLayouts);
         // Don't save until initial data is loaded from server
         if (!layoutLoaded) return;
-        // Save to backend - use ref to get current extras value
-        socket?.emit('layout:save', { layouts: allLayouts, extras: extraTerminalsRef.current });
+        socket?.emit('layout:save', { layouts: nextLayouts, extras: extraTerminalsRef.current, disabledCards: disabledCardsRef.current });
     };
 
     const toggleLayoutLock = () => {
@@ -203,7 +232,7 @@ const Dashboard: React.FC = () => {
 
         // Save layout when EXITING edit mode - use refs for current values
         if (wasEditing) {
-            socket?.emit('layout:save', { layouts: layoutsRef.current, extras: extraTerminalsRef.current });
+            socket?.emit('layout:save', { layouts: layoutsRef.current, extras: extraTerminalsRef.current, disabledCards: disabledCardsRef.current });
         }
     };
 
@@ -218,7 +247,7 @@ const Dashboard: React.FC = () => {
         };
         setLayouts(nextLayouts);
 
-        socket?.emit('layout:save', { layouts: nextLayouts, extras: nextExtras });
+        socket?.emit('layout:save', { layouts: nextLayouts, extras: nextExtras, disabledCards: disabledCardsRef.current });
 
         // Also tell server to stop that terminal process if we tracked it?
         // Actually terminal service persists configs, we should remove them there too?
@@ -240,19 +269,81 @@ const Dashboard: React.FC = () => {
         };
         setLayouts(nextLayouts);
 
-        socket?.emit('layout:save', { layouts: nextLayouts, extras: nextExtras });
+        socket?.emit('layout:save', { layouts: nextLayouts, extras: nextExtras, disabledCards: disabledCardsRef.current });
+    };
+
+    const cardOptions = [
+        { id: 'info', label: 'System Info' },
+        { id: 'cpu', label: 'CPU & Memory' },
+        { id: 'storage', label: 'Storage' },
+        { id: 'smart', label: 'SMART Health' },
+        { id: 'steam', label: 'Steam' },
+        { id: 'terminal', label: 'Terminal' },
+        { id: 'cleaner', label: 'Cleaner' },
+        { id: 'packages', label: 'Packages' },
+        { id: 'controls', label: 'System Controls' },
+        { id: 'files', label: 'Files' }
+    ];
+
+    const toggleCard = (id: string) => {
+        if (!layoutLoaded || !socket || cardVisibilitySavePendingRef.current) return;
+
+        const previousDisabledCards = disabledCardsRef.current;
+        const nextDisabledCards = previousDisabledCards.includes(id)
+            ? previousDisabledCards.filter(cardId => cardId !== id)
+            : [...previousDisabledCards, id];
+
+        // Visibility changes synchronously trigger grid reconciliation. Suppress those
+        // derived saves until this explicit visibility update has been acknowledged.
+        cardVisibilitySavePendingRef.current = true;
+        disabledCardsRef.current = nextDisabledCards;
+        setDisabledCards(nextDisabledCards);
+        socket.timeout(5000).emit('layout:save', {
+            layouts: layoutsRef.current,
+            extras: extraTerminalsRef.current,
+            disabledCards: nextDisabledCards
+        }, (error: Error | null, response?: { success: boolean; layout?: { layouts: { lg: RGL_Layout; md: RGL_Layout; sm: RGL_Layout }; extras: string[]; disabledCards?: string[] } }) => {
+            cardVisibilitySavePendingRef.current = false;
+            if (disabledCardsRef.current !== nextDisabledCards) return;
+
+            if (error || !response?.success || !response.layout) {
+                disabledCardsRef.current = previousDisabledCards;
+                setDisabledCards(previousDisabledCards);
+                return;
+            }
+
+            const savedLayout = response.layout;
+            if (savedLayout.layouts) {
+                layoutsRef.current = savedLayout.layouts;
+                setLayouts(savedLayout.layouts);
+            }
+            if (savedLayout.extras) {
+                extraTerminalsRef.current = savedLayout.extras;
+                setExtraTerminals(savedLayout.extras);
+            }
+            const savedDisabledCards = savedLayout.disabledCards || [];
+            disabledCardsRef.current = savedDisabledCards;
+            setDisabledCards(savedDisabledCards);
+        });
     };
 
     // Cast Responsive to any to avoid strict prop typing issues with isDraggable in some versions
     const ResponsiveGrid = Responsive as any;
 
-    // Dynamically enforce static property based on isDraggable state
-    // This ensures that even if local storage has 'static: false', we override it when locked.
+    // Keep disabled cards in the grid as invisible placeholders. Their layout items reserve
+    // the saved rectangles, preventing visible cards from compacting into those positions.
+    const gridLayout = (layout: RGL_Layout) => layout
+        .map(item => ({ ...item, static: !isDraggable || disabledCards.includes(item.i) }));
     const activeLayouts = {
-        lg: layouts.lg.map(i => ({ ...i, static: !isDraggable })),
-        md: layouts.md.map(i => ({ ...i, static: !isDraggable })),
-        sm: layouts.sm.map(i => ({ ...i, static: !isDraggable }))
+        lg: gridLayout(layouts.lg),
+        md: gridLayout(layouts.md),
+        sm: gridLayout(layouts.sm)
     };
+    const hiddenCardPlaceholders = disabledCards
+        .filter(id => id !== 'terminal' && !extraTerminals.includes(id))
+        .map(id => (
+            <div key={id} className="invisible pointer-events-none" aria-hidden="true" />
+        ));
 
     return (
         <div className="min-h-screen bg-gray-950 text-gray-100 font-sans p-6">
@@ -266,11 +357,30 @@ const Dashboard: React.FC = () => {
                         <Key size={16} />
                     </button>
                     {isDraggable && (
-                        <>
+                        <div className="flex flex-wrap justify-end gap-2">
+                            {cardOptions.map(card => {
+                                const isEnabled = !disabledCards.includes(card.id);
+                                return (
+                                    <button
+                                        key={card.id}
+                                        onClick={() => toggleCard(card.id)}
+                                        disabled={!layoutLoaded}
+                                        className={`px-3 py-1 rounded border text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${isEnabled
+                                            ? 'bg-blue-700 hover:bg-blue-600 border-blue-500 text-white'
+                                            : 'bg-gray-900 hover:bg-gray-800 border-gray-700 text-gray-400'
+                                            }`}
+                                        title={layoutLoaded
+                                            ? `${isEnabled ? 'Disable' : 'Enable'} ${card.label} card`
+                                            : 'Waiting for saved layout to load'}
+                                    >
+                                        {isEnabled ? 'Disable' : 'Enable'} {card.label}
+                                    </button>
+                                );
+                            })}
                             <button onClick={addTerminalWidget} className="bg-green-700 hover:bg-green-600 px-3 py-1 rounded border border-green-500 text-sm flex items-center gap-1">
                                 <Plus size={16} /> Add Terminal Card
                             </button>
-                        </>
+                        </div>
                     )}
                     <button
                         onClick={toggleLayoutLock}
@@ -303,39 +413,60 @@ const Dashboard: React.FC = () => {
                             containerPadding={[24, 24]}
                             useCSSTransforms={width > 0}
                         >
-                            <div key="info" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <SystemInfoWidget />
-                            </div>
+                            {hiddenCardPlaceholders}
 
-                            <div key="cpu" className="bg-gray-800/80 rounded-xl border border-gray-700 overflow-hidden backdrop-blur-sm shadow-xl">
-                                <CpuWidget />
-                            </div>
-                            <div key="storage" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <StorageWidget />
-                            </div>
-                            <div key="smart" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <SmartWidget />
-                            </div>
+                            {!disabledCards.includes('info') && (
+                                <div key="info" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                                    <SystemInfoWidget />
+                                </div>
+                            )}
 
-                            <div key="steam" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <SteamWidget />
-                            </div>
+                            {!disabledCards.includes('cpu') && (
+                                <div key="cpu" className="bg-gray-800/80 rounded-xl border border-gray-700 overflow-hidden backdrop-blur-sm shadow-xl">
+                                    <CpuWidget />
+                                </div>
+                            )}
+                            {!disabledCards.includes('storage') && (
+                                <div key="storage" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                                    <StorageWidget />
+                                </div>
+                            )}
+                            {!disabledCards.includes('smart') && (
+                                <div key="smart" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                                    <SmartWidget />
+                                </div>
+                            )}
 
-                            <div key="terminal" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                            {!disabledCards.includes('steam') && (
+                                <div key="steam" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                                    <SteamWidget />
+                                </div>
+                            )}
+
+                            <div
+                                key="terminal"
+                                className={`bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md${disabledCards.includes('terminal') ? ' hidden' : ''}`}
+                            >
                                 <TerminalWidget widgetId="terminal" isEditing={isDraggable} />
                             </div>
 
-                            {/* Cleaner Widget */}
-                            <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <CleanerWidget />
-                            </div>
+                            {!disabledCards.includes('cleaner') && (
+                                <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                                    <CleanerWidget />
+                                </div>
+                            )}
 
-                            <div key="packages" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <PackageWidget />
-                            </div>
+                            {!disabledCards.includes('packages') && (
+                                <div key="packages" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                                    <PackageWidget />
+                                </div>
+                            )}
 
                             {extraTerminals.map(id => (
-                                <div key={id} className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                                <div
+                                    key={id}
+                                    className={`bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group${disabledCards.includes(id) ? ' hidden' : ''}`}
+                                >
                                     {isDraggable && (
                                         <button
                                             onClick={() => removeTerminalWidget(id)}
@@ -349,13 +480,17 @@ const Dashboard: React.FC = () => {
                                 </div>
                             ))}
 
-                            <div key="controls" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <SystemControlWidget />
-                            </div>
+                            {!disabledCards.includes('controls') && (
+                                <div key="controls" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                                    <SystemControlWidget />
+                                </div>
+                            )}
 
-                            <div key="files" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                <FileBrowserWidget />
-                            </div>
+                            {!disabledCards.includes('files') && (
+                                <div key="files" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
+                                    <FileBrowserWidget />
+                                </div>
+                            )}
                         </ResponsiveGrid>
                     )}
                 </div>
