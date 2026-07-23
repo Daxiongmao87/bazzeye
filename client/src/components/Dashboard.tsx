@@ -130,26 +130,38 @@ const Dashboard: React.FC = () => {
 
         socket.on('layout:data', (data: { layouts: any, extras: string[], disabledCards?: string[] }) => {
             if (data && data.layouts) {
-                // Merge/Migrate if needed, but for now trust backend
-                setLayouts({
+                const nextLayouts = {
                     lg: migrateLayout(data.layouts.lg || []),
                     md: migrateLayout(data.layouts.md || []),
                     sm: migrateLayout(data.layouts.sm || [])
-                });
+                };
+                layoutsRef.current = nextLayouts;
+                setLayouts(nextLayouts);
             }
             if (data && data.extras) {
+                extraTerminalsRef.current = data.extras;
                 setExtraTerminals(data.extras);
             }
-            setDisabledCards(data?.disabledCards || []);
+            const nextDisabledCards = data?.disabledCards || [];
+            disabledCardsRef.current = nextDisabledCards;
+            setDisabledCards(nextDisabledCards);
             // Mark as loaded - now safe to save
             setLayoutLoaded(true);
         });
 
         socket.on('layout:updated', (data: { layouts: any, extras: string[], disabledCards?: string[] }) => {
-            // Received update from another client
-            if (data && data.layouts) setLayouts(data.layouts);
-            if (data && data.extras) setExtraTerminals(data.extras);
-            setDisabledCards(data?.disabledCards || []);
+            // Update refs before state so grid reconciliation cannot re-save stale visibility.
+            if (data && data.layouts) {
+                layoutsRef.current = data.layouts;
+                setLayouts(data.layouts);
+            }
+            if (data && data.extras) {
+                extraTerminalsRef.current = data.extras;
+                setExtraTerminals(data.extras);
+            }
+            const nextDisabledCards = data?.disabledCards || [];
+            disabledCardsRef.current = nextDisabledCards;
+            setDisabledCards(nextDisabledCards);
         });
 
         // Auth Events
