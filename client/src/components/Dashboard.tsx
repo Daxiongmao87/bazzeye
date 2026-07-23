@@ -395,11 +395,12 @@ const Dashboard: React.FC = () => {
                                 </div>
                             )}
 
-                            {!disabledCards.includes('terminal') && (
-                                <div key="terminal" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
-                                    <TerminalWidget widgetId="terminal" isEditing={isDraggable} />
-                                </div>
-                            )}
+                            <div
+                                key="terminal"
+                                className={`bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md${disabledCards.includes('terminal') ? ' hidden' : ''}`}
+                            >
+                                <TerminalWidget widgetId="terminal" isEditing={isDraggable} />
+                            </div>
 
                             {!disabledCards.includes('cleaner') && (
                                 <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
@@ -413,8 +414,11 @@ const Dashboard: React.FC = () => {
                                 </div>
                             )}
 
-                            {extraTerminals.filter(id => !disabledCards.includes(id)).map(id => (
-                                <div key={id} className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
+                            {extraTerminals.map(id => (
+                                <div
+                                    key={id}
+                                    className={`bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group${disabledCards.includes(id) ? ' hidden' : ''}`}
+                                >
                                     {isDraggable && (
                                         <button
                                             onClick={() => removeTerminalWidget(id)}
