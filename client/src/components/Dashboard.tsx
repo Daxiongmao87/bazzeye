@@ -213,14 +213,12 @@ const Dashboard: React.FC = () => {
     const onLayoutChange = (_currentLayout: RGL_Layout, allLayouts: any) => {
         if (cardVisibilitySavePendingRef.current) return;
 
-        const mergeHiddenCards = (previous: RGL_Layout, updated: RGL_Layout = []) => [
-            ...updated,
-            ...previous.filter(item => disabledCardsRef.current.includes(item.i))
-        ];
+        // Every card remains represented in the grid, including invisible placeholders for
+        // disabled cards, so react-grid-layout returns a complete collision-free layout.
         const nextLayouts = {
-            lg: mergeHiddenCards(layoutsRef.current.lg, allLayouts.lg),
-            md: mergeHiddenCards(layoutsRef.current.md, allLayouts.md),
-            sm: mergeHiddenCards(layoutsRef.current.sm, allLayouts.sm)
+            lg: allLayouts.lg || layoutsRef.current.lg,
+            md: allLayouts.md || layoutsRef.current.md,
+            sm: allLayouts.sm || layoutsRef.current.sm
         };
         setLayouts(nextLayouts);
         // Don't save until initial data is loaded from server
@@ -332,15 +330,20 @@ const Dashboard: React.FC = () => {
     // Cast Responsive to any to avoid strict prop typing issues with isDraggable in some versions
     const ResponsiveGrid = Responsive as any;
 
-    // Hidden cards remain in the persisted layouts so enabling one restores its previous position and size.
-    const visibleLayout = (layout: RGL_Layout) => layout
-        .filter(item => !disabledCards.includes(item.i))
-        .map(item => ({ ...item, static: !isDraggable }));
+    // Keep disabled cards in the grid as invisible placeholders. Their layout items reserve
+    // the saved rectangles, preventing visible cards from compacting into those positions.
+    const gridLayout = (layout: RGL_Layout) => layout
+        .map(item => ({ ...item, static: !isDraggable || disabledCards.includes(item.i) }));
     const activeLayouts = {
-        lg: visibleLayout(layouts.lg),
-        md: visibleLayout(layouts.md),
-        sm: visibleLayout(layouts.sm)
+        lg: gridLayout(layouts.lg),
+        md: gridLayout(layouts.md),
+        sm: gridLayout(layouts.sm)
     };
+    const hiddenCardPlaceholders = disabledCards
+        .filter(id => id !== 'terminal' && !extraTerminals.includes(id))
+        .map(id => (
+            <div key={id} className="invisible pointer-events-none" aria-hidden="true" />
+        ));
 
     return (
         <div className="min-h-screen bg-gray-950 text-gray-100 font-sans p-6">
@@ -410,6 +413,8 @@ const Dashboard: React.FC = () => {
                             containerPadding={[24, 24]}
                             useCSSTransforms={width > 0}
                         >
+                            {hiddenCardPlaceholders}
+
                             {!disabledCards.includes('info') && (
                                 <div key="info" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md">
                                     <SystemInfoWidget />
