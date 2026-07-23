@@ -301,7 +301,7 @@ const Dashboard: React.FC = () => {
             layouts: layoutsRef.current,
             extras: extraTerminalsRef.current,
             disabledCards: nextDisabledCards
-        }, (error: Error | null, response?: { success: boolean; layout?: { layouts: any; extras: string[]; disabledCards?: string[] } }) => {
+        }, (error: Error | null, response?: { success: boolean; layout?: { layouts: { lg: RGL_Layout; md: RGL_Layout; sm: RGL_Layout }; extras: string[]; disabledCards?: string[] } }) => {
             if (disabledCardsRef.current !== nextDisabledCards) return;
 
             if (error || !response?.success || !response.layout) {
