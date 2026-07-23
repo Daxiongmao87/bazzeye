@@ -273,6 +273,8 @@ const Dashboard: React.FC = () => {
     ];
 
     const toggleCard = (id: string) => {
+        if (!layoutLoaded) return;
+
         const nextDisabledCards = disabledCards.includes(id)
             ? disabledCards.filter(cardId => cardId !== id)
             : [...disabledCards, id];
@@ -316,11 +318,14 @@ const Dashboard: React.FC = () => {
                                     <button
                                         key={card.id}
                                         onClick={() => toggleCard(card.id)}
-                                        className={`px-3 py-1 rounded border text-sm transition-colors ${isEnabled
+                                        disabled={!layoutLoaded}
+                                        className={`px-3 py-1 rounded border text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${isEnabled
                                             ? 'bg-blue-700 hover:bg-blue-600 border-blue-500 text-white'
                                             : 'bg-gray-900 hover:bg-gray-800 border-gray-700 text-gray-400'
                                             }`}
-                                        title={`${isEnabled ? 'Disable' : 'Enable'} ${card.label} card`}
+                                        title={layoutLoaded
+                                            ? `${isEnabled ? 'Disable' : 'Enable'} ${card.label} card`
+                                            : 'Waiting for saved layout to load'}
                                     >
                                         {isEnabled ? 'Disable' : 'Enable'} {card.label}
                                     </button>
