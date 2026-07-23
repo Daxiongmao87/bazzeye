@@ -122,7 +122,7 @@ io.on('connection', (socket) => {
         console.log('[Layout] Saving layouts, extras:', extras);
         layoutService.saveLayout(layouts, extras, disabledCards);
         // Broadcast to other clients?
-        socket.broadcast.emit('layout:updated', { layouts, extras, disabledCards });
+        socket.broadcast.emit('layout:updated', layoutService.getLayout());
     });
 
     socket.on('steam:request-games', async () => {
