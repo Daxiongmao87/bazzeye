@@ -32,31 +32,36 @@ const SteamWidget: React.FC = () => {
         socket.emit('steam:request-games');
         socket.emit('steam:get-library-paths');
 
-        socket.on('steam:games', (data: SteamGame[]) => {
+        const handleGames = (data: SteamGame[]) => {
             setGames(data);
             setLoading(false);
-        });
+        };
 
-        socket.on('steam:now-playing', (game: SteamGame | null) => {
+        const handleNowPlaying = (game: SteamGame | null) => {
             setNowPlaying(game);
-        });
+        };
 
-        socket.on('steam:library-paths', (paths: string[]) => {
+        const handleLibraryPaths = (paths: string[]) => {
             setLibraryPaths(paths);
-        });
+        };
 
-        socket.on('files:list-data', (response: any) => {
+        const handleFileList = (response: any) => {
             if (response.success && response.files) {
                 const dirs = response.files.filter((f: any) => f.type === 'directory');
                 setPathSuggestions({ path: response.currentPath || '', items: dirs });
             }
-        });
+        };
+
+        socket.on('steam:games', handleGames);
+        socket.on('steam:now-playing', handleNowPlaying);
+        socket.on('steam:library-paths', handleLibraryPaths);
+        socket.on('files:list-data', handleFileList);
 
         return () => {
-            socket.off('steam:games');
-            socket.off('steam:now-playing');
-            socket.off('steam:library-paths');
-            socket.off('files:list-data');
+            socket.off('steam:games', handleGames);
+            socket.off('steam:now-playing', handleNowPlaying);
+            socket.off('steam:library-paths', handleLibraryPaths);
+            socket.off('files:list-data', handleFileList);
         };
     }, [socket]);
 

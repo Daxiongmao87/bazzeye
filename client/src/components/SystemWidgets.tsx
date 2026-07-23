@@ -45,11 +45,13 @@ export const SystemDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (!socket) return;
 
         socket.emit('system:get-bios');
-        socket.on('system:bios', (data: any) => {
+        const handleBios = (data: any) => {
             setBios(data);
-        });
+        };
 
-        socket.on('system-stats-history', (hist: SystemStats[]) => {
+        socket.on('system:bios', handleBios);
+
+        const handleStatsHistory = (hist: SystemStats[]) => {
             const formatted = hist.map(data => ({
                 time: new Date(data.timestamp).toLocaleTimeString(),
                 cpu: data.cpu.load,
@@ -63,9 +65,11 @@ export const SystemDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             if (hist.length > 0) {
                 setStats(hist[hist.length - 1]);
             }
-        });
+        };
 
-        socket.on('system-stats', (data: SystemStats) => {
+        socket.on('system-stats-history', handleStatsHistory);
+
+        const handleStats = (data: SystemStats) => {
             setStats(data);
             setHistory(prev => {
                 const newHistory = [...prev, {
@@ -78,19 +82,23 @@ export const SystemDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 }];
                 return newHistory.slice(-60); // Keep last 60 points matches backend buffer
             });
-        });
+        };
+
+        socket.on('system-stats', handleStats);
 
         // Request and listen for specs
         socket.emit('system:specs');
-        socket.on('system:specs-data', (data: SysSpecs) => {
+        const handleSpecs = (data: SysSpecs) => {
             setSpecs(data);
-        });
+        };
+
+        socket.on('system:specs-data', handleSpecs);
 
         return () => {
-            socket.off('system-stats');
-            socket.off('system-stats-history');
-            socket.off('system:specs-data');
-            socket.off('system:bios');
+            socket.off('system-stats', handleStats);
+            socket.off('system-stats-history', handleStatsHistory);
+            socket.off('system:specs-data', handleSpecs);
+            socket.off('system:bios', handleBios);
         };
     }, [socket]);
 
@@ -246,15 +254,21 @@ export const CpuWidget: React.FC = () => {
     useEffect(() => {
         if (!socket) return;
         socket.emit('config:get');
-        socket.on('config:data', (data: any) => {
+
+        const handleConfigData = (data: any) => {
             if (data && data.alerts) setAlertSettings(data.alerts);
-        });
-        socket.on('config:alerts-updated', (newAlerts: AlertSettings) => {
+        };
+
+        const handleAlertsUpdated = (newAlerts: AlertSettings) => {
             setAlertSettings(newAlerts);
-        });
+        };
+
+        socket.on('config:data', handleConfigData);
+        socket.on('config:alerts-updated', handleAlertsUpdated);
+
         return () => {
-            socket.off('config:data');
-            socket.off('config:alerts-updated');
+            socket.off('config:data', handleConfigData);
+            socket.off('config:alerts-updated', handleAlertsUpdated);
         }
     }, [socket]);
 

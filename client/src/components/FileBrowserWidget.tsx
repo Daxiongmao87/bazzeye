@@ -60,7 +60,7 @@ const FileBrowserWidget: React.FC = () => {
 
         socket.emit('system:owner-info');
 
-        socket.on('system:owner-info-data', (data: { home: string, username: string }) => {
+        const handleOwnerInfo = (data: { home: string, username: string }) => {
             console.log('[FileBrowser] Owner home:', data.home);
             setOwnerHome(data.home);
 
@@ -86,9 +86,11 @@ const FileBrowserWidget: React.FC = () => {
 
             // Navigate to home
             navigateTo(data.home);
-        });
+        };
 
-        return () => { socket.off('system:owner-info-data'); };
+        socket.on('system:owner-info-data', handleOwnerInfo);
+
+        return () => { socket.off('system:owner-info-data', handleOwnerInfo); };
     }, [socket]);
 
     useEffect(() => {
@@ -133,7 +135,7 @@ const FileBrowserWidget: React.FC = () => {
     useEffect(() => {
         if (!socket) return;
 
-        socket.on('files:list-data', (data) => {
+        const handleFileList = (data: any) => {
             setLoading(false);
             if (data.success) {
                 setFiles(data.files);
@@ -157,9 +159,11 @@ const FileBrowserWidget: React.FC = () => {
                 setError(data.error);
                 // If error, maybe don't update path?
             }
-        });
+        };
 
-        return () => { socket.off('files:list-data'); };
+        socket.on('files:list-data', handleFileList);
+
+        return () => { socket.off('files:list-data', handleFileList); };
     }, [socket]);
 
     // Update history index when history changes (if length increased)

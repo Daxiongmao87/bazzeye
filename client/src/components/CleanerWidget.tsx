@@ -39,7 +39,7 @@ export const CleanerWidget: React.FC = () => {
         // Request schedule on mount
         socket.emit('cleaner:get-schedule');
 
-        socket.on('system:clean-status', (data: { status: string, output?: string, scheduled?: boolean }) => {
+        const handleCleanStatus = (data: { status: string, output?: string, scheduled?: boolean }) => {
             if (data.status === 'running') setStatus('running');
             else if (data.status === 'success') {
                 setStatus('success');
@@ -49,15 +49,19 @@ export const CleanerWidget: React.FC = () => {
                 setStatus('error');
                 setOutput(String(data.output || 'Error'));
             }
-        });
+        };
 
-        socket.on('cleaner:schedule-status', (data: ScheduleConfig) => {
+        socket.on('system:clean-status', handleCleanStatus);
+
+        const handleScheduleStatus = (data: ScheduleConfig) => {
             setSchedule(data);
-        });
+        };
+
+        socket.on('cleaner:schedule-status', handleScheduleStatus);
 
         return () => {
-            socket.off('system:clean-status');
-            socket.off('cleaner:schedule-status');
+            socket.off('system:clean-status', handleCleanStatus);
+            socket.off('cleaner:schedule-status', handleScheduleStatus);
         };
     }, [socket]);
 
