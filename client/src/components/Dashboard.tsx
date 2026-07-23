@@ -278,6 +278,9 @@ const Dashboard: React.FC = () => {
         const nextDisabledCards = disabledCards.includes(id)
             ? disabledCards.filter(cardId => cardId !== id)
             : [...disabledCards, id];
+        // Update the ref synchronously so ResponsiveGrid's immediate onLayoutChange
+        // cannot persist and broadcast the previous visibility state.
+        disabledCardsRef.current = nextDisabledCards;
         setDisabledCards(nextDisabledCards);
         socket?.emit('layout:save', {
             layouts: layoutsRef.current,
