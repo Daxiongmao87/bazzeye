@@ -10,6 +10,17 @@ interface SteamGame {
     imageUrl: string;
 }
 
+interface FileListItem {
+    name: string;
+    type: string;
+}
+
+interface FileListResponse {
+    success: boolean;
+    files?: FileListItem[];
+    currentPath?: string;
+}
+
 const SteamWidget: React.FC = () => {
     const socket = useSocket();
     const [games, setGames] = useState<SteamGame[]>([]);
@@ -20,7 +31,7 @@ const SteamWidget: React.FC = () => {
     const [editingPaths, setEditingPaths] = useState<string[]>([]);
 
     // Simple suggestion state
-    const [pathSuggestions, setPathSuggestions] = useState<{ path: string; items: any[] }>({ path: '', items: [] });
+    const [pathSuggestions, setPathSuggestions] = useState<{ path: string; items: FileListItem[] }>({ path: '', items: [] });
     const [pathInputFocus, setPathInputFocus] = useState<number>(-1);
     const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
 
@@ -45,9 +56,9 @@ const SteamWidget: React.FC = () => {
             setLibraryPaths(paths);
         };
 
-        const handleFileList = (response: any) => {
+        const handleFileList = (response: FileListResponse) => {
             if (response.success && response.files) {
-                const dirs = response.files.filter((f: any) => f.type === 'directory');
+                const dirs = response.files.filter((f: FileListItem) => f.type === 'directory');
                 setPathSuggestions({ path: response.currentPath || '', items: dirs });
             }
         };
@@ -124,7 +135,7 @@ const SteamWidget: React.FC = () => {
         }
     };
 
-    const handleSuggestionClick = (index: number, suggestion: any) => {
+    const handleSuggestionClick = (index: number, suggestion: FileListItem) => {
         const currentPath = editingPaths[index] || '';
         const currentDir = getDirectoryPath(currentPath);
         const prefix = currentDir.endsWith('/') ? currentDir : currentDir + '/';
@@ -144,7 +155,7 @@ const SteamWidget: React.FC = () => {
 
         if (pathSuggestions.path !== currentDir || pathSuggestions.items.length === 0) return;
 
-        const filteredItems = pathSuggestions.items.filter((p: any) =>
+        const filteredItems = pathSuggestions.items.filter((p: FileListItem) =>
             p.name.toLowerCase().startsWith(partial.toLowerCase())
         );
 
@@ -258,7 +269,7 @@ const SteamWidget: React.FC = () => {
                                     const partial = getPartialName(path);
                                     const pathMatch = pathSuggestions.path === currentDir;
 
-                                    const filteredItems = pathSuggestions.items.filter((p: any) =>
+                                    const filteredItems = pathSuggestions.items.filter((p: FileListItem) =>
                                         p.name.toLowerCase().startsWith(partial.toLowerCase())
                                     );
 
@@ -293,7 +304,7 @@ const SteamWidget: React.FC = () => {
 
                                             {showDropdown && (
                                                 <div className="absolute top-full left-0 right-10 z-50 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                                                    {filteredItems.map((suggestion: any, i: number) => (
+                                                    {filteredItems.map((suggestion: FileListItem, i: number) => (
                                                         <button
                                                             key={suggestion.name}
                                                             className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors ${i === activeSuggestionIndex ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
