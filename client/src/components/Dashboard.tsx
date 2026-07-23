@@ -87,6 +87,7 @@ const Dashboard: React.FC = () => {
     // Refs to track current values for callbacks (avoids stale closure)
     const extraTerminalsRef = useRef<string[]>([]);
     const disabledCardsRef = useRef<string[]>([]);
+    const cardVisibilitySavePendingRef = useRef(false);
     const layoutsRef = useRef(layouts);
 
     // Keep refs in sync with state
@@ -210,6 +211,8 @@ const Dashboard: React.FC = () => {
     }, [socket]);
 
     const onLayoutChange = (_currentLayout: RGL_Layout, allLayouts: any) => {
+        if (cardVisibilitySavePendingRef.current) return;
+
         const mergeHiddenCards = (previous: RGL_Layout, updated: RGL_Layout = []) => [
             ...updated,
             ...previous.filter(item => disabledCardsRef.current.includes(item.i))
@@ -285,16 +288,16 @@ const Dashboard: React.FC = () => {
     ];
 
     const toggleCard = (id: string) => {
-        if (!layoutLoaded || !socket) return;
+        if (!layoutLoaded || !socket || cardVisibilitySavePendingRef.current) return;
 
         const previousDisabledCards = disabledCardsRef.current;
         const nextDisabledCards = previousDisabledCards.includes(id)
             ? previousDisabledCards.filter(cardId => cardId !== id)
             : [...previousDisabledCards, id];
 
-        // Update optimistically, but wait for the server acknowledgement before treating
-        // the change as durable. The identity check prevents a late response from
-        // overwriting a newer local or peer update.
+        // Visibility changes synchronously trigger grid reconciliation. Suppress those
+        // derived saves until this explicit visibility update has been acknowledged.
+        cardVisibilitySavePendingRef.current = true;
         disabledCardsRef.current = nextDisabledCards;
         setDisabledCards(nextDisabledCards);
         socket.timeout(5000).emit('layout:save', {
@@ -302,6 +305,7 @@ const Dashboard: React.FC = () => {
             extras: extraTerminalsRef.current,
             disabledCards: nextDisabledCards
         }, (error: Error | null, response?: { success: boolean; layout?: { layouts: { lg: RGL_Layout; md: RGL_Layout; sm: RGL_Layout }; extras: string[]; disabledCards?: string[] } }) => {
+            cardVisibilitySavePendingRef.current = false;
             if (disabledCardsRef.current !== nextDisabledCards) return;
 
             if (error || !response?.success || !response.layout) {
