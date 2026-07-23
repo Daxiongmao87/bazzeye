@@ -28,15 +28,13 @@ const SmartWidget: React.FC = () => {
         // Initial request
         socket.emit('system:request-smart-status');
 
-        const handleSmartStatusUpdate = (data: SmartData[]) => {
+        socket.on('system:smart-status-update', (data: SmartData[]) => {
             setDrives(data);
             setLoading(false);
             setLastScan(new Date().toLocaleTimeString());
-        };
+        });
 
-        socket.on('system:smart-status-update', handleSmartStatusUpdate);
-
-        return () => { socket.off('system:smart-status-update', handleSmartStatusUpdate); };
+        return () => { socket.off('system:smart-status-update'); };
     }, [socket]);
 
     return (

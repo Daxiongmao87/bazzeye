@@ -30,9 +30,9 @@ const TerminalWidget: React.FC<TerminalWidgetProps> = ({ widgetId = 'terminal', 
     useEffect(() => {
         if (!socket) return;
         socket.emit('config:get');
-        const handleConfigData = (data: any) => {
+        socket.on('config:data', (data: any) => {
             if (data?.terminal?.transparent !== undefined) setIsTransparent(data.terminal.transparent);
-        };
+        });
         // Listen for specific updates if we implemented granular events
         // But for now we can likely rely on a full refresh or specific event if we added it?
         // Server emits 'config:updated' (from service)? No, I implemented 'config:alerts-updated'.
@@ -41,16 +41,13 @@ const TerminalWidget: React.FC<TerminalWidgetProps> = ({ widgetId = 'terminal', 
         // But the service saves and... wait. Service emits 'config:updated' but index.ts didn't re-broadcast it?
         // Let's check my ConfigService... save() emits 'config:updated' to `this.io`. 
         // So yes, we should listen to 'config:updated'.
-        const handleConfigUpdated = (newConfig: any) => {
+        socket.on('config:updated', (newConfig: any) => {
             if (newConfig?.terminal?.transparent !== undefined) setIsTransparent(newConfig.terminal.transparent);
-        };
-
-        socket.on('config:data', handleConfigData);
-        socket.on('config:updated', handleConfigUpdated);
+        });
 
         return () => {
-            socket.off('config:data', handleConfigData);
-            socket.off('config:updated', handleConfigUpdated);
+            socket.off('config:data');
+            socket.off('config:updated');
         };
     }, [socket]);
 
@@ -69,7 +66,7 @@ const TerminalWidget: React.FC<TerminalWidgetProps> = ({ widgetId = 'terminal', 
         // Request saved terminals
         socket.emit('term:list');
 
-        const handleTerminalList = (configs: any[]) => {
+        socket.on('term:list-data', (configs: any[]) => {
             // Filter configs for this widget
             const myConfigs = configs.filter((c: any) => {
                 // If config has no widgetId, assume it belongs to default 'terminal'
@@ -90,11 +87,9 @@ const TerminalWidget: React.FC<TerminalWidgetProps> = ({ widgetId = 'terminal', 
                 setActiveTermId(defaultId);
                 socket.emit('term:create', initial);
             }
-        };
+        });
 
-        socket.on('term:list-data', handleTerminalList);
-
-        return () => { socket.off('term:list-data', handleTerminalList); };
+        return () => { socket.off('term:list-data'); };
     }, [socket, widgetId]); // Re-run if widgetId changes
 
     const addTerminal = () => {

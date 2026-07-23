@@ -14,34 +14,17 @@ interface FileEntry {
     path: string;
 }
 
-interface Place {
-    name: string;
-    path: string;
-    iconName?: string;
-}
-
-interface FileListResponse {
-    success: boolean;
-    files?: FileEntry[];
-    currentPath?: string;
-    error?: string;
-}
-
 const FileBrowserWidget: React.FC = () => {
     const socket = useSocket();
 
     // Owner info from server (setOwnerHome used in socket handler)
-    const [, setOwnerHome] = useState<string | null>(null);
+    const [_ownerHome, setOwnerHome] = useState<string | null>(null);
 
     // History Management
     const [history, setHistory] = useState<string[]>([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
-    const historyIndexRef = useRef(historyIndex);
-    historyIndexRef.current = historyIndex;
 
     const [currentPath, setCurrentPath] = useState<string>('');
-    const currentPathRef = useRef(currentPath);
-    currentPathRef.current = currentPath;
     const [files, setFiles] = useState<FileEntry[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -69,7 +52,7 @@ const FileBrowserWidget: React.FC = () => {
         { name: 'Documents', path: `${home}/Documents`, iconName: 'filetext' },
     ];
 
-    const [places, setPlaces] = useState<Place[]>([]);
+    const [places, setPlaces] = useState<{ name: string, path: string, iconName?: string }[]>([]);
 
     // Fetch owner info on mount
     useEffect(() => {
@@ -77,7 +60,7 @@ const FileBrowserWidget: React.FC = () => {
 
         socket.emit('system:owner-info');
 
-        const handleOwnerInfo = (data: { home: string, username: string }) => {
+        socket.on('system:owner-info-data', (data: { home: string, username: string }) => {
             console.log('[FileBrowser] Owner home:', data.home);
             setOwnerHome(data.home);
 
@@ -85,16 +68,16 @@ const FileBrowserWidget: React.FC = () => {
             const saved = localStorage.getItem('file-browser-places');
             if (saved) {
                 try {
-                    const parsed = JSON.parse(saved) as Place[];
+                    const parsed = JSON.parse(saved);
                     // Check if saved places still reference /root - if so, reset
-                    const hasOldRootPaths = parsed.some((place) => place.path.includes('/root'));
+                    const hasOldRootPaths = parsed.some((p: any) => p.path?.includes('/root'));
                     if (hasOldRootPaths) {
                         console.log('[FileBrowser] Resetting places due to old /root paths');
                         setPlaces(getDefaultPlaces(data.home));
                     } else {
                         setPlaces(parsed);
                     }
-                } catch {
+                } catch (e) {
                     setPlaces(getDefaultPlaces(data.home));
                 }
             } else {
@@ -102,14 +85,10 @@ const FileBrowserWidget: React.FC = () => {
             }
 
             // Navigate to home
-            setLoading(true);
-            setError(null);
-            socket.emit('files:list', data.home);
-        };
+            navigateTo(data.home);
+        });
 
-        socket.on('system:owner-info-data', handleOwnerInfo);
-
-        return () => { socket.off('system:owner-info-data', handleOwnerInfo); };
+        return () => { socket.off('system:owner-info-data'); };
     }, [socket]);
 
     useEffect(() => {
@@ -154,17 +133,16 @@ const FileBrowserWidget: React.FC = () => {
     useEffect(() => {
         if (!socket) return;
 
-        const handleFileList = (data: FileListResponse) => {
+        socket.on('files:list-data', (data) => {
             setLoading(false);
             if (data.success) {
-                setFiles(data.files ?? []);
+                setFiles(data.files);
                 const normalizedPath = data.currentPath || '';
                 setCurrentPath(normalizedPath);
                 setAddressBar(normalizedPath);
 
                 // Update History only if it's a new navigation (not just a refresh)
                 setHistory(prev => {
-                    const historyIndex = historyIndexRef.current;
                     const current = prev[historyIndex];
                     if (current !== normalizedPath) {
                         // Truncate future if we branched
@@ -176,19 +154,17 @@ const FileBrowserWidget: React.FC = () => {
                 });
 
             } else {
-                setError(data.error ?? 'Unable to list files');
+                setError(data.error);
                 // If error, maybe don't update path?
             }
-        };
+        });
 
-        socket.on('files:list-data', handleFileList);
-
-        return () => { socket.off('files:list-data', handleFileList); };
+        return () => { socket.off('files:list-data'); };
     }, [socket]);
 
     // Update history index when history changes (if length increased)
     useEffect(() => {
-        if (history.length > 0 && history[history.length - 1] === currentPathRef.current) {
+        if (history.length > 0 && history[history.length - 1] === currentPath) {
             setHistoryIndex(history.length - 1);
         }
     }, [history]);
@@ -251,15 +227,14 @@ const FileBrowserWidget: React.FC = () => {
                 method: 'POST',
                 body: formData
             });
-            const json = await res.json() as { success: boolean; message?: string };
+            const json = await res.json();
             if (json.success) {
                 navigateTo(currentPath, true); // Refresh
             } else {
                 alert('Upload failed: ' + json.message);
             }
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            alert('Upload error: ' + message);
+        } catch (err: any) {
+            alert('Upload error: ' + err.message);
         } finally {
             setUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';

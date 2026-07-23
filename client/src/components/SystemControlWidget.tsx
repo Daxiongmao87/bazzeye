@@ -22,11 +22,11 @@ const SystemControlWidget: React.FC = () => {
 
         socket.emit('system:check-update');
 
-        const handleUpdateAvailable = (available: boolean) => {
+        socket.on('system:update-available', (available: boolean) => {
             setUpdateAvailable(available);
-        };
+        });
 
-        const handleUpdateStatus = (data: { status: string, error?: string }) => {
+        socket.on('system:update-status', (data: { status: string, error?: string }) => {
             setUpdateStatus(data.status as any);
             if (data.status === 'complete') {
                 alert('System update complete. Please reboot.');
@@ -36,23 +36,19 @@ const SystemControlWidget: React.FC = () => {
                 alert('Update failed: ' + data.error);
                 setUpdateStatus('idle');
             }
-        };
+        });
 
-        const handleUjustStatus = (data: UjustStatus) => {
+        socket.on('ujust:status', (data: UjustStatus) => {
             setUjustStatus(data);
             if (data.status !== 'running') {
                 setTimeout(() => setUjustStatus(null), 5000);
             }
-        };
-
-        socket.on('system:update-available', handleUpdateAvailable);
-        socket.on('system:update-status', handleUpdateStatus);
-        socket.on('ujust:status', handleUjustStatus);
+        });
 
         return () => {
-            socket.off('system:update-available', handleUpdateAvailable);
-            socket.off('system:update-status', handleUpdateStatus);
-            socket.off('ujust:status', handleUjustStatus);
+            socket.off('system:update-available');
+            socket.off('system:update-status');
+            socket.off('ujust:status');
         };
     }, [socket]);
 
