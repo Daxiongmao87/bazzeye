@@ -413,54 +413,54 @@ const Dashboard: React.FC = () => {
                         >
                             {!disabledCards.includes('info') && (
                                 <div key="info" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
-                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('info')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Disable System Information card"><X size={12} /></button>}
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('info')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable System Information card"><X size={12} /></button>}
                                     <SystemInfoWidget />
                                 </div>
                             )}
 
                             {!disabledCards.includes('cpu') && (
                                 <div key="cpu" className="bg-gray-800/80 rounded-xl border border-gray-700 overflow-hidden backdrop-blur-sm shadow-xl relative group">
-                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('cpu')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Disable CPU & Memory card"><X size={12} /></button>}
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('cpu')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable CPU & Memory card"><X size={12} /></button>}
                                     <CpuWidget />
                                 </div>
                             )}
                             {!disabledCards.includes('storage') && (
                                 <div key="storage" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
-                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('storage')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Disable Storage card"><X size={12} /></button>}
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('storage')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable Storage card"><X size={12} /></button>}
                                     <StorageWidget />
                                 </div>
                             )}
                             {!disabledCards.includes('smart') && (
                                 <div key="smart" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
-                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('smart')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Disable SMART Health card"><X size={12} /></button>}
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('smart')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable SMART Health card"><X size={12} /></button>}
                                     <SmartWidget />
                                 </div>
                             )}
 
                             {!disabledCards.includes('steam') && (
                                 <div key="steam" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
-                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('steam')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Disable Steam card"><X size={12} /></button>}
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('steam')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable Steam card"><X size={12} /></button>}
                                     <SteamWidget />
                                 </div>
                             )}
 
                             {!disabledCards.includes('terminal') && (
                                 <div key="terminal" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
-                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('terminal')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Disable Terminal card"><X size={12} /></button>}
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('terminal')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable Terminal card"><X size={12} /></button>}
                                     <TerminalWidget widgetId="terminal" isEditing={isDraggable} />
                                 </div>
                             )}
 
                             {!disabledCards.includes('cleaner') && (
                                 <div key="cleaner" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
-                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('cleaner')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Disable Cleaner card"><X size={12} /></button>}
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('cleaner')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable Cleaner card"><X size={12} /></button>}
                                     <CleanerWidget />
                                 </div>
                             )}
 
                             {!disabledCards.includes('packages') && (
                                 <div key="packages" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
-                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('packages')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Disable Packages card"><X size={12} /></button>}
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('packages')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable Packages card"><X size={12} /></button>}
                                     <PackageWidget />
                                 </div>
                             )}
@@ -470,7 +470,7 @@ const Dashboard: React.FC = () => {
                                     {isDraggable && (
                                         <button
                                             onClick={() => removeTerminalWidget(id)}
-                                            className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
                                             title="Remove Widget"
                                         >
                                             <X size={12} />
@@ -482,14 +482,14 @@ const Dashboard: React.FC = () => {
 
                             {!disabledCards.includes('controls') && (
                                 <div key="controls" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
-                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('controls')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Disable System Controls card"><X size={12} /></button>}
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('controls')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable System Controls card"><X size={12} /></button>}
                                     <SystemControlWidget />
                                 </div>
                             )}
 
                             {!disabledCards.includes('files') && (
                                 <div key="files" className="bg-gray-900/80 rounded-xl border border-gray-800 overflow-hidden shadow-lg backdrop-blur-md relative group">
-                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('files')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Disable File Browser card"><X size={12} /></button>}
+                                    {isDraggable && <button onMouseDown={event => event.stopPropagation()} onClick={() => disableCard('files')} className="absolute top-2 right-2 z-50 bg-red-600 text-white rounded-full p-1 opacity-100 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100" title="Disable File Browser card"><X size={12} /></button>}
                                     <FileBrowserWidget />
                                 </div>
                             )}
